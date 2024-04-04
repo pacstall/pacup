@@ -4,7 +4,7 @@ use warnings;
 use feature qw(say signatures);
 
 #use Carp 'croak';
-#use Data::Dumper;
+use Data::Dumper;
 use File::Basename 'basename';
 use File::chdir;
 use File::Path qw(make_path rmtree);
@@ -12,7 +12,8 @@ use File::Temp qw(tempfile tempdir);
 use JSON 'decode_json';
 
 my $SCRIPT    = basename $0;
-my $PACUP_DIR = tempdir 'pacup.XXXXXX';
+my $TMPDIR    = ( $ENV{'TMPDIR'} or '/tmp' );
+my $PACUP_DIR = tempdir 'pacup.XXXXXX', DIR => $TMPDIR;
 
 my $REPOLOGY_API_ROOT = 'https://repology.org/api/v1/project';
 my $USERAGENT =
@@ -20,7 +21,7 @@ my $USERAGENT =
 my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 
 sub throw ($action) {
-    print STDERR "$SCRIPT: could not $action: $!" and exit 1;
+    print STDERR "$SCRIPT: could not $action: $!\n" and exit 1;
 }
 
 sub msg ($text) {
@@ -40,7 +41,8 @@ END {
 }
 
 sub getvar ( $name, $lines ) {
-    for (@$lines) {
+    my @lines = @$lines;
+    for (@lines) {
         s/^$name=// and m/^ ["'] ([^"']+) ["'] $/x and return $1;
     }
 }
@@ -70,7 +72,7 @@ sub geturl ($entry) {
     return $url;
 }
 
-sub get_sourced ( $name, $infile, $carch ) {
+sub get_sourced ( $name, $infile, $carch = 'amd64' ) {
     my $output =
       qx(env CARCH=$carch bash -e -c 'source "$infile" && printf \%s "$name"');
     throw "get $name from $infile" unless $? == 0;
@@ -140,6 +142,7 @@ sub main ($infile) {
 
     my @repology = getarr 'repology', \@lines;
     throw 'find repology' unless @repology;
+    @repology = map { $_ = get_sourced $_, $infile } @repology;
     msg 'found repology';
 
     my %repology_filters = parse_repology \@repology;
@@ -153,10 +156,10 @@ sub main ($infile) {
     msg 'nothing to do' and return 0 if $? == 0;
 
     msg 'updating pkgver...';
-    s/^pkgver=.*/pkgver="$newestver"/ for @lines;
+    s/$pkgver/$newestver/ for @lines;
     {
         open my $fh, '>', $infile or throw "open $infile";
-        print $fh ( join '\n', @lines ) or throw "write to $infile";
+        print $fh ( join "\n", @lines ) or throw "write to $infile";
         close $fh                       or throw "close $infile";
     }
 
@@ -216,7 +219,8 @@ sub main ($infile) {
     }
 
     msg "installing from $pacscript...";
-    system "pacstall -PI $infile" or throw "install from $pacscript";
+    system "pacstall -PI $infile";
+    throw "install from $pacscript" unless $? == 0;
 
     return unless ask "does $pkgname work?";
 
