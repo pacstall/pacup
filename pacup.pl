@@ -1,4 +1,7 @@
 #!/usr/bin/env perl
+# dependencies on Debian:
+# libfile-chdir-perl libipc-system-simple-perl libjson-perl
+
 use strict;
 use warnings;
 use autodie qw(:all);
