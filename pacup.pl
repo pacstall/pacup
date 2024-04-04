@@ -1,6 +1,7 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
+use autodie qw(:all);
 use feature qw(say signatures);
 
 #use Carp 'croak';
@@ -21,7 +22,7 @@ my $USERAGENT =
 my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 
 sub throw ($action) {
-    print STDERR "$SCRIPT: could not $action: $!\n" and exit 1;
+    say STDERR "$SCRIPT: could not $action: $!" and exit 1;
 }
 
 sub msg ($text) {
@@ -29,15 +30,16 @@ sub msg ($text) {
 }
 
 sub ask ($text) {
-    msg "$text [y/N] ";
-    chomp( my $answer = <STDIN> );
-    return 1 if lc $answer =~ /ye?s?/;
+    eval {
+        msg "$text [y/N] ";
+        chomp( my $answer = <STDIN> );
+        return 1 if lc $answer =~ /ye?s?/;
+    }
 }
 
 END {
     msg 'cleaning up...';
     rmtree $PACUP_DIR;
-    throw "remove $PACUP_DIR" unless $? == 0;
 }
 
 sub getvar ( $name, $lines ) {
@@ -75,7 +77,6 @@ sub geturl ($entry) {
 sub get_sourced ( $name, $infile, $carch = 'amd64' ) {
     my $output =
       qx(env CARCH=$carch bash -e -c 'source "$infile" && printf \%s "$name"');
-    throw "get $name from $infile" unless $? == 0;
     return $output;
 }
 
@@ -109,7 +110,6 @@ sub query_repology ($filters) {
 
     my $response =
       qx(curl -H 'User-Agent: $USERAGENT' -s '$REPOLOGY_API_ROOT/$project');
-    throw "query Repology" unless $? == 0;
     return $response;
 }
 
@@ -125,9 +125,9 @@ sub main ($infile) {
     my $pacscript = basename $infile;
     my @lines;
     {
-        open my $fh, '<', $infile or throw "open $infile";
+        open my $fh, '<', $infile;
         chomp( @lines = <$fh> );
-        close $fh or throw "close $infile";
+        close $fh;
     }
 
     msg "parsing $infile...";
@@ -152,15 +152,18 @@ sub main ($infile) {
     my $newestver = repology_get_newestver $response;
     msg "current version: $pkgver";
     msg "newest version: $newestver";
-    system "dpkg --compare-versions $pkgver ge $newestver";
-    msg 'nothing to do' and return 0 if $? == 0;
+    {
+        no autodie 'system';
+        system "dpkg --compare-versions $pkgver ge $newestver";
+        msg 'nothing to do' and exit if $? == 0;
+    }
 
     msg 'updating pkgver...';
     s/$pkgver/$newestver/ for @lines;
     {
-        open my $fh, '>', $infile or throw "open $infile";
-        print $fh ( join "\n", @lines ) or throw "write to $infile";
-        close $fh                       or throw "close $infile";
+        open my $fh, '>', $infile;
+        print $fh ( join "\n", @lines );
+        close $fh;
     }
 
     my @arches = getarr 'arch', \@lines;
@@ -207,36 +210,32 @@ sub main ($infile) {
             defined $oldhash or next;
             msg "calculating $hashtype for $file...";
             my ($newhash) = split ' ', qx(${hashtype}sum $file);
-            throw "check $hashtype for $file" unless $? == 0;
             s/$oldhash/$newhash/ for @lines;
         }
     }
     msg "updating $pacscript...";
     {
-        open my $fh, '>', $infile or throw "open $infile";
-        print $fh ( join '\n', @lines ) or throw "write to $infile";
-        close $fh                       or throw "close $infile";
+        open my $fh, '>', $infile;
+        print $fh ( join "\n", @lines ) or throw "write to $infile";
+        close $fh;
     }
 
     msg "installing from $pacscript...";
     system "pacstall -PI $infile";
-    throw "install from $pacscript" unless $? == 0;
 
-    return unless ask "does $pkgname work?";
+    exit unless ask "does $pkgname work?";
 
     my $commit_msg = qq/upd($pkgname): `$pkgver` -> `$newestver`/;
 
-    system "git checkout -b ship-$pkgname master"
-      or throw "create ship-$pkgname branch";
-    system qq/git add $infile && git commit -m "$commit_msg"/
-      or throw 'commit changes';
+    system "git checkout -b ship-$pkgname master";
+    system qq/git add $infile && git commit -m "$commit_msg"/;
     system "git push -u origin ship-$pkgname" or throw 'push changes';
 
-    return
+    exit
       unless ask
       "create PR? (must have gh installed and authenticated to GitHub)";
 
-    system qq(gh pr create --title "$commit_msg" --body "") or throw 'open PR';
+    system qq(gh pr create --title "$commit_msg" --body "");
 
     say "$SCRIPT: done";
     return 1;
