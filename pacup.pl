@@ -31,9 +31,9 @@ sub msg ($text) {
 
 sub ask ($text) {
     eval {
-        msg "$text [y/N] ";
+        print "$SCRIPT: $text [y/N] ";
         chomp( my $answer = <STDIN> );
-        return 1 if lc $answer =~ /ye?s?/;
+        return 1 if ( lc $answer ) =~ /ye?s?/;
     }
 }
 
