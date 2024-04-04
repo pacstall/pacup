@@ -6,6 +6,7 @@ use strict;
 use warnings;
 use autodie qw(:all);
 use feature qw(say signatures);
+no warnings qw(experimental::signatures);
 
 #use Carp 'croak';
 use Data::Dumper;
