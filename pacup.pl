@@ -44,9 +44,11 @@ END {
 
 sub getvar ( $name, $lines ) {
     my @lines = @$lines;
+    my $var;
     for (@lines) {
-        s/^$name=// and m/^ ["'] ([^"']+) ["'] $/x and return $1;
+        s/^$name=// and m/^ ["'] ([^"']+) ["'] $/x and $var = $1;
     }
+    return $var if $var && $var !~ /^\s*$/;
 }
 
 sub getarr ( $name, $lines ) {
@@ -60,7 +62,7 @@ sub getarr ( $name, $lines ) {
             last OUTER if /\)$/;
         }
     }
-    return @arr;
+    return @arr if @arr;
 }
 
 sub geturl ($entry) {
@@ -121,6 +123,27 @@ sub repology_get_newestver ($response) {
     }
 }
 
+sub fetch_sources ( $pkgdir, $sources, $lines ) {
+    my @lines = @$lines;
+    local $CWD = $pkgdir;
+    for my $entry (@$sources) {
+        my $url  = $entry->{'url'};
+        my $file = basename $url;
+        msg "fetching $url as $file...";
+
+        system qq(curl -fS#L -o "$file" "$url");
+        throw "fetch $url" unless $? == 0;
+        for my $hashtype (@HASHTYPES) {
+            my $oldhash = $entry->{$hashtype};
+            $oldhash or next;
+            msg "calculating $hashtype for $file...";
+            my ($newhash) = split ' ', qx(${hashtype}sum $file);
+            s/$oldhash/$newhash/ for @lines;
+        }
+    }
+    return @lines;
+}
+
 sub main ($infile) {
     my $pacscript = basename $infile;
     my @lines;
@@ -133,11 +156,11 @@ sub main ($infile) {
     msg "parsing $infile...";
 
     my $pkgname = getvar 'pkgname', \@lines;
-    throw 'find pkgname' unless defined $pkgname;
+    throw 'find pkgname' unless $pkgname;
     msg "found pkgname: $pkgname";
 
     my $pkgver = getvar 'pkgver', \@lines;
-    throw 'find pkgver' unless defined $pkgver;
+    throw 'find pkgver' unless $pkgver;
     msg "found pkgver: $pkgver";
 
     my @repology = getarr 'repology', \@lines;
@@ -197,22 +220,8 @@ sub main ($infile) {
 
     msg "Fetching sources for $pkgname...";
     my $pkgdir = tempdir "$pkgname.XXXXXX", DIR => $PACUP_DIR;
-    local $CWD = $pkgdir;
-    for my $entry (@allSources) {
-        my $url  = $entry->{'url'};
-        my $file = basename $url;
-        msg "fetching $url as $file...";
+    @lines = fetch_sources $pkgdir, \@allSources, \@lines;
 
-        system qq(curl -fS#L -o "$file" "$url");
-        throw "fetch $url" unless $? == 0;
-        for my $hashtype (@HASHTYPES) {
-            my $oldhash = $entry->{$hashtype};
-            defined $oldhash or next;
-            msg "calculating $hashtype for $file...";
-            my ($newhash) = split ' ', qx(${hashtype}sum $file);
-            s/$oldhash/$newhash/ for @lines;
-        }
-    }
     msg "updating $pacscript...";
     {
         open my $fh, '>', $infile;
@@ -221,7 +230,10 @@ sub main ($infile) {
     }
 
     msg "installing from $pacscript...";
-    system "pacstall -PI $infile";
+    {
+        no autodie 'system';
+        system "pacstall -PI $infile";
+    }
 
     exit unless ask "does $pkgname work?";
 
