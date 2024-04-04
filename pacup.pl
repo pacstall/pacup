@@ -30,7 +30,7 @@ sub msg ($text) {
 
 sub ask ($text) {
     msg "$text [y/N] ";
-    chomp( my $answer = <> );
+    chomp( my $answer = <STDIN> );
     return 1 if lc $answer =~ /ye?s?/;
 }
 
