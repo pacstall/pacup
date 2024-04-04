@@ -189,7 +189,7 @@ sub main ($infile) {
     s/$pkgver/$newestver/ for @lines;
     {
         open my $fh, '>', $infile;
-        print $fh ( join "\n", @lines );
+        print $fh ( join "\n", @lines ) or throw "write to $infile";
         close $fh;
     }
 
