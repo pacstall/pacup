@@ -1,4 +1,5 @@
-pkgname="pacup-pl-git"
+pkgname="pacup.pl-git"
+gives="pacup.pl"
 pkgver="20240404"
 pkgdesc="Next-gen rewrite of Pacup"
 depends=(
