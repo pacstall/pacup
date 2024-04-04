@@ -23,8 +23,18 @@ sub throw ($action) {
     print STDERR "$SCRIPT: could not $action: $!" and exit 1;
 }
 
+sub msg ($text) {
+    say "$SCRIPT: $text";
+}
+
+sub ask ($text) {
+    msg "$text [y/N] ";
+    chomp( my $answer = <> );
+    return 1 if lc $answer =~ /ye?s?/;
+}
+
 END {
-    say "$SCRIPT: cleaning up...";
+    msg 'cleaning up...';
     rmtree $PACUP_DIR;
     throw "remove $PACUP_DIR" unless $? == 0;
 }
@@ -118,29 +128,37 @@ sub main ($infile) {
         close $fh or throw "close $infile";
     }
 
-    say "$SCRIPT: parsing $infile...";
+    msg "parsing $infile...";
 
     my $pkgname = getvar 'pkgname', \@lines;
     throw 'find pkgname' unless defined $pkgname;
-    say "$SCRIPT: found pkgname: $pkgname";
+    msg "found pkgname: $pkgname";
 
     my $pkgver = getvar 'pkgver', \@lines;
     throw 'find pkgver' unless defined $pkgver;
-    say "$SCRIPT: found pkgver: $pkgver";
+    msg "found pkgver: $pkgver";
 
     my @repology = getarr 'repology', \@lines;
     throw 'find repology' unless @repology;
-    say "$SCRIPT: found repology";
+    msg 'found repology';
 
     my %repology_filters = parse_repology \@repology;
 
-    say "$SCRIPT: querying repology...";
+    msg 'querying Repology...';
     my $response  = query_repology \%repology_filters;
     my $newestver = repology_get_newestver $response;
-    say "$SCRIPT: current version: $pkgver";
-    say "$SCRIPT: newest version: $newestver";
+    msg "current version: $pkgver";
+    msg "newest version: $newestver";
     system "dpkg --compare-versions $pkgver ge $newestver";
-    say "$SCRIPT: nothing to do" and return 0 if $? == 0;
+    msg 'nothing to do' and return 0 if $? == 0;
+
+    msg 'updating pkgver...';
+    s/^pkgver=.*/pkgver="$newestver"/ for @lines;
+    {
+        open my $fh, '>', $infile or throw "open $infile";
+        print $fh ( join '\n', @lines ) or throw "write to $infile";
+        close $fh                       or throw "close $infile";
+    }
 
     my @arches = getarr 'arch', \@lines;
     @arches = qw(amd64) unless @arches;
@@ -162,7 +180,7 @@ sub main ($infile) {
         @sourceList = grep { $_->{'url'} =~ /pkgver/ } @sourceList;
         for my $entry (@sourceList) {
             $entry->{'url'} = get_sourced $entry->{'url'}, $infile, $arch;
-            say "$SCRIPT: found source url: " . $entry->{'url'};
+            msg 'found source url: ' . $entry->{'url'};
         }
 
         @sourceList = grep check_hashes, @sourceList;
@@ -171,34 +189,53 @@ sub main ($infile) {
     }
     throw 'find sources' unless @allSources;
 
-    say "$SCRIPT: Fetching sources for $pkgname...";
+    msg "Fetching sources for $pkgname...";
     my $pkgdir = tempdir "$pkgname.XXXXXX", DIR => $PACUP_DIR;
     local $CWD = $pkgdir;
     for my $entry (@allSources) {
         my $url  = $entry->{'url'};
         my $file = basename $url;
-        say "$SCRIPT: fetching $url as $file...";
+        msg "fetching $url as $file...";
 
         system qq(curl -fS#L -o "$file" "$url");
         throw "fetch $url" unless $? == 0;
         for my $hashtype (@HASHTYPES) {
             my $oldhash = $entry->{$hashtype};
             defined $oldhash or next;
-            say "$SCRIPT: calculating $hashtype for $file...";
+            msg "calculating $hashtype for $file...";
             my ($newhash) = split ' ', qx(${hashtype}sum $file);
             throw "check $hashtype for $file" unless $? == 0;
             s/$oldhash/$newhash/ for @lines;
         }
     }
-    say "$SCRIPT: updating $pacscript...";
+    msg "updating $pacscript...";
     {
         open my $fh, '>', $infile or throw "open $infile";
         print $fh ( join '\n', @lines ) or throw "write to $infile";
         close $fh                       or throw "close $infile";
     }
 
+    msg "installing from $pacscript...";
+    system "pacstall -PI $infile" or throw "install from $pacscript";
+
+    return unless ask "does $pkgname work?";
+
+    my $commit_msg = qq/upd($pkgname): `$pkgver` -> `$newestver`/;
+
+    system "git checkout -b ship-$pkgname master"
+      or throw "create ship-$pkgname branch";
+    system qq/git add $infile && git commit -m "$commit_msg"/
+      or throw 'commit changes';
+    system "git push -u origin ship-$pkgname" or throw 'push changes';
+
+    return
+      unless ask
+      "create PR? (must have gh installed and authenticated to GitHub)";
+
+    system qq(gh pr create --title "$commit_msg" --body "") or throw 'open PR';
+
     say "$SCRIPT: done";
-    return 0;
+    return 1;
 }
 
 main @ARGV;
