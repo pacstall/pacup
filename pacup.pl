@@ -60,7 +60,7 @@ sub geturl ($entry) {
     return $url;
 }
 
-sub get_sourced ( $name, $infile, $carch = 'amd64' ) {
+sub get_sourced ( $name, $infile, $carch ) {
     my $output =
       qx(env CARCH=$carch bash -e -c 'source "$infile" && printf \%s "$name"');
     throw "get $name from $infile" unless $? == 0;
