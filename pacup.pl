@@ -1,6 +1,7 @@
 #!/usr/bin/env perl
 # dependencies on Debian:
 # libfile-chdir-perl libipc-system-simple-perl libjson-perl
+our $VERSION = '0.0.1';
 
 use strict;
 use warnings;
@@ -14,6 +15,7 @@ use File::Basename 'basename';
 use File::chdir;
 use File::Path qw(make_path rmtree);
 use File::Temp 'tempdir';
+use Getopt::Long qw(:config auto_version bundling);
 use JSON 'decode_json';
 
 my $SCRIPT    = basename $0;
@@ -160,6 +162,8 @@ sub fetch_sources ( $pkgdir, $sources, $lines ) {
     return @lines;
 }
 
+my $ship = 0;
+
 sub main ($infile) {
     my $pacscript = basename $infile;
     my @lines;
@@ -255,6 +259,7 @@ sub main ($infile) {
     }
 
     exit unless ask "does $pkgname work?";
+    exit unless $ship;
 
     my $commit_msg = qq/upd($pkgname): `$pkgver` -> `$newestver`/;
 
@@ -273,6 +278,9 @@ sub main ($infile) {
     return 1;
 }
 
-main @ARGV;
+GetOptions 'ship' => \$ship;
+for my $infile (@ARGV) {
+    main $infile;
+}
 
 # vim: set ts=4 sw=4 et:
