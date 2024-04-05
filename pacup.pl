@@ -280,6 +280,7 @@ sub main ($infile) {
 
 GetOptions 'ship' => \$ship;
 for my $infile (@ARGV) {
+    -f $infile or die "$SCRIPT: $infile: not a file\n";
     main $infile;
 }
 
