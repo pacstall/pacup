@@ -198,15 +198,14 @@ sub main ($infile) {
     {
         no autodie 'system';
         system "dpkg --compare-versions $pkgver ge $newestver";
-        msg 'nothing to do' and exit if $? == 0;
+        msg 'nothing to do' and return 1 if $? == 0;
     }
 
     msg 'updating pkgver...';
     s/$pkgver/$newestver/ for @lines;
     {
         open my $fh, '>', $infile;
-        print $fh ( join "\n", @lines ) or throw "write to $infile";
-        print $fh "\n";
+        print $fh ( join "\n", @lines ) . "\n" or throw "write to $infile";
         close $fh;
     }
 
@@ -247,8 +246,7 @@ sub main ($infile) {
     msg "updating $pacscript...";
     {
         open my $fh, '>', $infile;
-        print $fh ( join "\n", @lines ) or throw "write to $infile";
-        print $fh "\n";
+        print $fh ( join "\n", @lines ) . "\n" or throw "write to $infile";
         close $fh;
     }
 
@@ -258,8 +256,8 @@ sub main ($infile) {
         system "pacstall -PI $infile";
     }
 
-    exit unless ask "does $pkgname work?";
-    exit unless $ship;
+    return unless ask "does $pkgname work?";
+    return 1 unless $ship;
 
     my $commit_msg = qq/upd($pkgname): `$pkgver` -> `$newestver`/;
 
@@ -268,7 +266,7 @@ sub main ($infile) {
     system qq/git add $infile && git commit -m "$commit_msg"/;
     system "git push -u origin ship-$pkgname" or throw 'push changes';
 
-    exit
+    return 1
       unless ask
       'create PR? (must have gh installed and authenticated to GitHub)';
 
