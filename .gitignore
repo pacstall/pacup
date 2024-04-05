@@ -1,1 +1,4 @@
 .vscode/
+*.bak
+*~
+*.sw[a-z]
