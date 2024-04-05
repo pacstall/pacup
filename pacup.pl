@@ -58,7 +58,7 @@ sub getvar ( $name, $lines ) {
 sub getarr ( $name, $lines ) {
     my @lines = @$lines;
     my @arr;
-    OUTER: while ( my ( $i, $line ) = each @lines ) {
+  OUTER: while ( my ( $i, $line ) = each @lines ) {
         $line =~ /^$name=\(/ or next;
         for ( @lines[ $i .. $#lines ] ) {
             s/^$name=\(//;
@@ -130,10 +130,10 @@ sub query_repology ($filters) {
     return $response;
 }
 
-sub repology_get_newestver ($response, $filters) {
+sub repology_get_newestver ( $response, $filters ) {
     my $decoded = decode_json $response;
     for my $entry (@$decoded) {
-        while (my ($key, $val) = each %$filters) {
+        while ( my ( $key, $val ) = each %$filters ) {
             next unless $entry->{$key} eq $val;
         }
         next unless $entry->{'status'} eq 'newest';
