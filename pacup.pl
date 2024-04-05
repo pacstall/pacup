@@ -13,7 +13,7 @@ use Data::Dumper;
 use File::Basename 'basename';
 use File::chdir;
 use File::Path qw(make_path rmtree);
-use File::Temp qw(tempfile tempdir);
+use File::Temp 'tempdir';
 use JSON 'decode_json';
 
 my $SCRIPT    = basename $0;
@@ -34,11 +34,9 @@ sub msg ($text) {
 }
 
 sub ask ($text) {
-    eval {
-        print "$SCRIPT: $text [y/N] ";
-        chomp( my $answer = <STDIN> );
-        return 1 if ( lc $answer ) =~ /ye?s?/;
-    }
+    print "$SCRIPT: $text [y/N] ";
+    chomp( my $answer = <> );
+    return 1 if ( lc $answer ) =~ /ye?s?/;
 }
 
 END {
@@ -266,7 +264,7 @@ sub main ($infile) {
 
     exit
       unless ask
-      "create PR? (must have gh installed and authenticated to GitHub)";
+      'create PR? (must have gh installed and authenticated to GitHub)';
 
     system qq(gh pr create --title "$commit_msg" --body "");
 
