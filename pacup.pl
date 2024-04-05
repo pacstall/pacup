@@ -35,7 +35,7 @@ sub msg ($text) {
 
 sub ask ($text) {
     print "$SCRIPT: $text [y/N] ";
-    chomp( my $answer = <> );
+    chomp( my $answer = <STDIN> );
     return 1 if ( lc $answer ) =~ /ye?s?/;
 }
 
@@ -258,6 +258,7 @@ sub main ($infile) {
 
     my $commit_msg = qq/upd($pkgname): `$pkgver` -> `$newestver`/;
 
+    system qq/git add "$infile"/;
     system "git checkout -b ship-$pkgname master";
     system qq/git add $infile && git commit -m "$commit_msg"/;
     system "git push -u origin ship-$pkgname" or throw 'push changes';
