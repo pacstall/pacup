@@ -58,7 +58,7 @@ sub getvar ( $name, $lines ) {
 sub getarr ( $name, $lines ) {
     my @lines = @$lines;
     my @arr;
-  OUTER: while ( my ( $i, $line ) = each @lines ) {
+    OUTER: while ( my ( $i, $line ) = each @lines ) {
         $line =~ /^$name=\(/ or next;
         for ( @lines[ $i .. $#lines ] ) {
             s/^$name=\(//;
@@ -94,7 +94,18 @@ sub get_sourcearr ( $carch, $lines ) {
     else {
         @arr = getarr "source", $lines;
     }
-    return @arr;
+    return @arr if @arr;
+}
+
+sub get_sumarr ( $hashtype, $carch, $lines ) {
+    my @arr;
+    if ( grep m/^${hashtype}sums_$carch=\(/, @$lines ) {
+        @arr = getarr "${hashtype}sums_$carch", $lines;
+    }
+    else {
+        @arr = getarr "${hashtype}sums", $lines;
+    }
+    return @arr if @arr;
 }
 
 sub check_hashes {
@@ -139,7 +150,7 @@ sub fetch_sources ( $pkgdir, $sources, $lines ) {
         throw "fetch $url" unless $? == 0;
         for my $hashtype (@HASHTYPES) {
             my $oldhash = $entry->{$hashtype};
-            $oldhash or next;
+            defined $oldhash or next;
             msg "calculating $hashtype for $file...";
             my ($newhash) = split ' ', qx(${hashtype}sum $file);
             s/$oldhash/$newhash/ for @lines;
@@ -190,6 +201,7 @@ sub main ($infile) {
     {
         open my $fh, '>', $infile;
         print $fh ( join "\n", @lines ) or throw "write to $infile";
+        print $fh "\n";
         close $fh;
     }
 
@@ -204,7 +216,8 @@ sub main ($infile) {
             my %edict;
             $edict{'url'} = geturl $entry;
             for my $hashtype (@HASHTYPES) {
-                my @sums = getarr "${hashtype}sums_$arch", \@lines or next;
+                my @sums = get_sumarr $hashtype, $arch, \@lines;
+                next if grep { $_ eq 0 } @sums;
                 $edict{$hashtype} = $sums[$i];
             }
             push @sourceList, \%edict;
@@ -230,6 +243,7 @@ sub main ($infile) {
     {
         open my $fh, '>', $infile;
         print $fh ( join "\n", @lines ) or throw "write to $infile";
+        print $fh "\n";
         close $fh;
     }
 
