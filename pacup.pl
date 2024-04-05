@@ -130,9 +130,12 @@ sub query_repology ($filters) {
     return $response;
 }
 
-sub repology_get_newestver ($response) {
+sub repology_get_newestver ($response, $filters) {
     my $decoded = decode_json $response;
     for my $entry (@$decoded) {
+        while (my ($key, $val) = each %$filters) {
+            next unless $entry->{$key} eq $val;
+        }
         next unless $entry->{'status'} eq 'newest';
         return $entry->{'version'};
     }
@@ -187,7 +190,7 @@ sub main ($infile) {
 
     msg 'querying Repology...';
     my $response  = query_repology \%repology_filters;
-    my $newestver = repology_get_newestver $response;
+    my $newestver = repology_get_newestver $response, \%repology_filters;
     msg "current version: $pkgver";
     msg "newest version: $newestver";
     {
