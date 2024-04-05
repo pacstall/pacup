@@ -15,7 +15,7 @@ use File::Basename 'basename';
 use File::chdir;
 use File::Path qw(make_path rmtree);
 use File::Temp 'tempdir';
-use Getopt::Long qw(:config auto_version bundling);
+use Getopt::Long qw(:config auto_version);
 use JSON 'decode_json';
 
 my $SCRIPT    = basename $0;
