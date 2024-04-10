@@ -1,6 +1,4 @@
 #!/usr/bin/env perl
-# dependencies on Debian:
-# libfile-chdir-perl libipc-system-simple-perl libjson-perl
 our $VERSION = '0.0.1';
 
 use strict;
@@ -141,8 +139,16 @@ sub repology_get_newestver ( $response, $filters ) {
             }
         }
         next unless Compare \%filtered, $filters;
-        next unless $entry->{'status'} eq 'newest';
-        return $entry->{'version'};
+        my $newver = $entry->{'version'} || "";
+        if ( $entry->{'status'} eq 'newest' ) {
+            return $newver;
+        }
+        {
+            no autodie 'system';
+            system "dpkg --compare-versions $newver gt $pkgver";
+            next unless $? == 0;
+        }
+        return $newver;
     }
     throw 'find Repology entry that meets the requirements';
 }
