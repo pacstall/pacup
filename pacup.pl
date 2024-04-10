@@ -129,7 +129,7 @@ sub query_repology ($filters) {
     return $response;
 }
 
-sub repology_get_newestver ( $response, $filters ) {
+sub repology_get_newestver ( $response, $filters, $oldver ) {
     my $decoded = decode_json $response;
     for my $entry (@$decoded) {
         my %filtered;
@@ -145,7 +145,7 @@ sub repology_get_newestver ( $response, $filters ) {
         }
         {
             no autodie 'system';
-            system "dpkg --compare-versions $newver gt $pkgver";
+            system "dpkg --compare-versions $newver gt $oldver";
             next unless $? == 0;
         }
         return $newver;
@@ -205,7 +205,7 @@ sub main ($infile) {
 
     msg 'querying Repology...';
     my $response  = query_repology \%repology_filters;
-    my $newestver = repology_get_newestver $response, \%repology_filters;
+    my $newestver = repology_get_newestver $response, \%repology_filters, $pkgver;
     msg "current version: $pkgver";
     msg "newest version: $newestver";
     {
