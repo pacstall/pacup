@@ -136,10 +136,6 @@ sub query_repology ($filters) {
 sub repology_get_newestver ( $response, $filters, $oldver ) {
     my $decoded = decode_json $response;
     for my $entry (@$decoded) {
-        if ($opt_version) {
-            next unless $entry->{'version'} eq $opt_version;
-            return $entry->{'version'};
-        }
         my %filtered;
         for my $key (%$filters) {
             if ( exists $entry->{$key} && $entry->{$key} eq $filters->{$key} ) {
@@ -201,17 +197,22 @@ sub main ($infile) {
     throw 'find pkgver' unless $pkgver;
     msg "found pkgver: $pkgver";
 
-    my @repology = getarr 'repology', \@lines;
-    throw 'find repology' unless @repology;
-    @repology = map { $_ = get_sourced $_, $infile } @repology;
-    msg 'found repology';
+    my $newestver;
+    if ($opt_version) {
+        $newestver = $opt_version;
+    } else {
+        my @repology = getarr 'repology', \@lines;
+        throw 'find repology' unless @repology;
+        @repology = map { $_ = get_sourced $_, $infile } @repology;
+        msg 'found repology';
 
-    my %repology_filters = parse_repology \@repology;
+        my %repology_filters = parse_repology \@repology;
 
-    msg 'querying Repology...';
-    my $response  = query_repology \%repology_filters;
-    my $newestver = repology_get_newestver $response, \%repology_filters,
+        msg 'querying Repology...';
+        my $response  = query_repology \%repology_filters;
+        $newestver = repology_get_newestver $response, \%repology_filters,
       $pkgver;
+    }
     msg "current version: $pkgver";
     msg "newest version: $newestver";
     {
@@ -221,7 +222,7 @@ sub main ($infile) {
     }
 
     msg 'updating pkgver...';
-    s/$pkgver/$newestver/ for @lines;
+    s/\Q$pkgver\E/$newestver/ for @lines;
     {
         open my $fh, '>', $infile;
         print $fh ( join "\n", @lines ) . "\n" or throw "write to $infile";
