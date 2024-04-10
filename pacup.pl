@@ -132,9 +132,9 @@ sub query_repology ($filters) {
 
 sub repology_get_newestver ( $response, $filters ) {
     my $decoded = decode_json $response;
-    for my $entry (@$decoded) {
+  OUTER: for my $entry (@$decoded) {
         while ( my ( $key, $val ) = each %$filters ) {
-            next unless $entry->{$key} eq $val;
+            next OUTER unless $entry->{$key} eq $val;
         }
         next unless $entry->{'status'} eq 'newest';
         return $entry->{'version'};
@@ -256,7 +256,7 @@ sub main ($infile) {
         system "pacstall -PI $infile";
     }
 
-    return unless ask "does $pkgname work?";
+    return   unless ask "does $pkgname work?";
     return 1 unless $ship;
 
     my $commit_msg = qq/upd($pkgname): `$pkgver` -> `$newestver`/;
