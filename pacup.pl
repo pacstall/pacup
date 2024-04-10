@@ -174,7 +174,8 @@ sub fetch_sources ( $pkgdir, $sources, $lines ) {
     return @lines;
 }
 
-my $ship = 0;
+my $ship   = 0;
+my $remote = 'origin';
 
 sub main ($infile) {
     my $pacscript = basename $infile;
@@ -276,7 +277,7 @@ sub main ($infile) {
     system qq/git add "$infile"/;
     system "git checkout -b ship-$pkgname master";
     system qq/git add $infile && git commit -m "$commit_msg"/;
-    system "git push -u origin ship-$pkgname" or throw 'push changes';
+    system "git push -u $remote ship-$pkgname" or throw 'push changes';
 
     return 1
       unless ask
@@ -288,7 +289,11 @@ sub main ($infile) {
     return 1;
 }
 
-GetOptions 'ship' => \$ship;
+GetOptions(
+    'ship'     => \$ship,
+    'remote=s' => \$remote
+);
+
 for my $infile (@ARGV) {
     -f $infile or die "$SCRIPT: $infile: not a file\n";
     main $infile;
