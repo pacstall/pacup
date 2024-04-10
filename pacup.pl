@@ -298,7 +298,7 @@ sub main ($infile) {
 GetOptions(
     'ship'      => \$opt_ship,
     'remote=s'  => \$opt_remote,
-    'version=s' => \$opt_versiom
+    'version=s' => \$opt_version
 );
 
 for my $infile (@ARGV) {
