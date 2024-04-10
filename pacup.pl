@@ -276,14 +276,14 @@ sub main ($infile) {
     }
 
     return   unless ask "does $pkgname work?";
-    return 1 unless $ship;
+    return 1 unless $opt_ship;
 
     my $commit_msg = qq/upd($pkgname): `$pkgver` -> `$newestver`/;
 
     system qq/git add "$infile"/;
     system "git checkout -b ship-$pkgname master";
     system qq/git add $infile && git commit -m "$commit_msg"/;
-    system "git push -u $remote ship-$pkgname" or throw 'push changes';
+    system "git push -u $opt_remote ship-$pkgname" or throw 'push changes';
 
     return 1
       unless ask
