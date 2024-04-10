@@ -14,7 +14,7 @@ use File::Basename 'basename';
 use File::chdir;
 use File::Path qw(make_path rmtree);
 use File::Temp 'tempdir';
-use Getopt::Long qw(:config auto_version);
+use Getopt::Long;
 use JSON 'decode_json';
 
 my $SCRIPT    = basename $0;
@@ -25,6 +25,10 @@ my $REPOLOGY_API_ROOT = 'https://repology.org/api/v1/project';
 my $USERAGENT =
 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
+
+my $opt_ship   = 0;
+my $opt_remote = 'origin';
+my $opt_version;
 
 sub throw ($action) {
     say STDERR "$SCRIPT: could not $action: $!" and exit 1;
@@ -132,6 +136,10 @@ sub query_repology ($filters) {
 sub repology_get_newestver ( $response, $filters, $oldver ) {
     my $decoded = decode_json $response;
     for my $entry (@$decoded) {
+        if ($opt_version) {
+            next unless $entry->{'version'} eq $opt_version;
+            return $entry->{'version'};
+        }
         my %filtered;
         for my $key (%$filters) {
             if ( exists $entry->{$key} && $entry->{$key} eq $filters->{$key} ) {
@@ -174,9 +182,6 @@ sub fetch_sources ( $pkgdir, $sources, $lines ) {
     return @lines;
 }
 
-my $ship   = 0;
-my $remote = 'origin';
-
 sub main ($infile) {
     my $pacscript = basename $infile;
     my @lines;
@@ -205,7 +210,8 @@ sub main ($infile) {
 
     msg 'querying Repology...';
     my $response  = query_repology \%repology_filters;
-    my $newestver = repology_get_newestver $response, \%repology_filters, $pkgver;
+    my $newestver = repology_get_newestver $response, \%repology_filters,
+      $pkgver;
     msg "current version: $pkgver";
     msg "newest version: $newestver";
     {
@@ -290,8 +296,9 @@ sub main ($infile) {
 }
 
 GetOptions(
-    'ship'     => \$ship,
-    'remote=s' => \$remote
+    'ship'      => \$opt_ship,
+    'remote=s'  => \$opt_remote,
+    'version=s' => \$opt_versiom
 );
 
 for my $infile (@ARGV) {
