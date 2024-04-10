@@ -10,6 +10,7 @@ use feature qw(say signatures);
 no warnings qw(experimental::signatures);
 
 #use Carp 'croak';
+use Data::Compare;
 use Data::Dumper;
 use File::Basename 'basename';
 use File::chdir;
@@ -132,13 +133,18 @@ sub query_repology ($filters) {
 
 sub repology_get_newestver ( $response, $filters ) {
     my $decoded = decode_json $response;
-  OUTER: for my $entry (@$decoded) {
-        while ( my ( $key, $val ) = each %$filters ) {
-            next OUTER unless $entry->{$key} eq $val;
+    for my $entry (@$decoded) {
+        my %filtered;
+        for my $key (%$filters) {
+            if ( exists $entry->{$key} && $entry->{$key} eq $filters->{$key} ) {
+                $filtered{$key} = $entry->{$key};
+            }
         }
+        next unless Compare \%filtered, $filters;
         next unless $entry->{'status'} eq 'newest';
         return $entry->{'version'};
     }
+    throw 'find Repology entry that meets the requirements';
 }
 
 sub fetch_sources ( $pkgdir, $sources, $lines ) {
