@@ -11,8 +11,14 @@ repos:
       - id: perltidy
         name: perltidy
         description: Run the perltidy source code formatter on Perl source files
-        entry: perltidy --nostandard-output --backup-and-modify-in-place
-        args: [--standard-error-output, --backup-file-extension=/]
+        entry: perltidy
+        args: [
+          --perl-best-practices,
+          --nostandard-output,
+          --standard-error-output,
+          --backup-and-modify-in-place,
+          --backup-file-extension=/
+        ]
         language: perl
         types: [perl]
 

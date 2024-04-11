@@ -23,14 +23,14 @@ my $TMPDIR    = ( $ENV{'TMPDIR'} or '/tmp' );
 my $PACUP_DIR = tempdir 'pacup.XXXXXX', DIR => $TMPDIR;
 
 my $REPOLOGY_API_ROOT = 'https://repology.org/api/v1/project';
-my $USERAGENT =
-'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+my $USERAGENT
+    = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 
 my $opt_ship   = 0;
 my $opt_remote = 'origin';
-my $opt_version;
-my $opt_force  = 0;
+my $opt_custom_version;
+my $opt_push_force = 0;
 
 sub throw ($action) {
     say STDERR "$SCRIPT: could not $action: $!" and exit 1;
@@ -63,7 +63,7 @@ sub getvar ( $name, $lines ) {
 sub getarr ( $name, $lines ) {
     my @lines = @$lines;
     my @arr;
-  OUTER: while ( my ( $i, $line ) = each @lines ) {
+OUTER: while ( my ( $i, $line ) = each @lines ) {
         $line =~ /^$name=\(/ or next;
         for ( @lines[ $i .. $#lines ] ) {
             s/^$name=\(//;
@@ -86,8 +86,8 @@ sub geturl ($entry) {
 }
 
 sub get_sourced ( $name, $infile, $carch = 'amd64' ) {
-    my $output =
-      qx(env CARCH=$carch bash -e -c 'source "$infile" && printf \%s "$name"');
+    my $output
+        = qx(env CARCH=$carch bash -e -c 'source "$infile" && printf \%s "$name"');
     return $output;
 }
 
@@ -130,8 +130,8 @@ sub query_repology ($filters) {
     my $project = $filters->{'project'};
     delete $filters->{'project'};
 
-    my $response =
-      qx(curl -H 'User-Agent: $USERAGENT' -s '$REPOLOGY_API_ROOT/$project');
+    my $response
+        = qx(curl -H 'User-Agent: $USERAGENT' -s '$REPOLOGY_API_ROOT/$project');
     return $response;
 }
 
@@ -140,7 +140,8 @@ sub repology_get_newestver ( $response, $filters, $oldver ) {
     for my $entry (@$decoded) {
         my %filtered;
         for my $key (%$filters) {
-            if ( exists $entry->{$key} && $entry->{$key} eq $filters->{$key} ) {
+            if ( exists $entry->{$key} && $entry->{$key} eq $filters->{$key} )
+            {
                 $filtered{$key} = $entry->{$key};
             }
         }
@@ -200,9 +201,10 @@ sub main ($infile) {
     msg "found pkgver: $pkgver";
 
     my $newestver;
-    if ($opt_version) {
-        $newestver = $opt_version;
-    } else {
+    if ($opt_custom_version) {
+        $newestver = $opt_custom_version;
+    }
+    else {
         my @repology = getarr 'repology', \@lines;
         throw 'find repology' unless @repology;
         @repology = map { $_ = get_sourced $_, $infile } @repology;
@@ -211,9 +213,9 @@ sub main ($infile) {
         my %repology_filters = parse_repology \@repology;
 
         msg 'querying Repology...';
-        my $response  = query_repology \%repology_filters;
+        my $response = query_repology \%repology_filters;
         $newestver = repology_get_newestver $response, \%repology_filters,
-      $pkgver;
+            $pkgver;
     }
     msg "current version: $pkgver";
     msg "newest version: $newestver";
@@ -286,21 +288,27 @@ sub main ($infile) {
     system qq/git add "$infile"/;
     my $current_branch = `git rev-parse --abbrev-ref HEAD`;
     chomp($current_branch);
-    if (run(EXIT_ANY, "git show-ref --verify --quiet refs/heads/ship-$pkgname") == 0) {
+    if (run( EXIT_ANY,
+            "git show-ref --verify --quiet refs/heads/ship-$pkgname" ) == 0
+        )
+    {
         return unless ask "Delete existing branch ship-$pkgname?";
-        if ($current_branch eq "ship-$pkgname") {
+        if ( $current_branch eq "ship-$pkgname" ) {
             say "FATAL: currently on ship-$pkgname";
-            return;
-        } else {
+            exit 1;
+        }
+        else {
             system "git branch -D ship-$pkgname";
         }
     }
     system "git checkout -b ship-$pkgname";
     system qq/git commit -m "$commit_msg"/;
-    my $force = $opt_force ? '--force' : '';
+    my $force = $opt_push_force ? '--force' : '';
     system "git push -u $opt_remote ship-$pkgname $force";
 
-    if (ask 'create PR? (must have gh installed and authenticated to GitHub)') {
+    if ( ask
+        'create PR? (must have gh installed and authenticated to GitHub)' )
+    {
         system qq(gh pr create --title "$commit_msg" --body "");
     }
 
@@ -309,10 +317,10 @@ sub main ($infile) {
 }
 
 GetOptions(
-    'ship'      => \$opt_ship,
-    'remote=s'  => \$opt_remote,
-    'version=s' => \$opt_version,
-    'pushforce' => \$opt_force
+    'ship'               => \$opt_ship,
+    'remote=s'           => \$opt_remote,
+    'custom-version|c=s' => \$opt_custom_version,
+    'push-force'         => \$opt_push_force,
 );
 
 for my $infile (@ARGV) {
