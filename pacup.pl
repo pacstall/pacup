@@ -15,17 +15,16 @@ use File::chdir;
 use File::Path qw(make_path rmtree);
 use File::Temp 'tempdir';
 use Getopt::Long;
-use JSON 'decode_json';
 use IPC::System::Simple qw(run EXIT_ANY);
+use JSON 'decode_json';
+use LWP::UserAgent;
 
 my $SCRIPT    = basename $0;
 my $TMPDIR    = ( $ENV{'TMPDIR'} or '/tmp' );
 my $PACUP_DIR = tempdir 'pacup.XXXXXX', DIR => $TMPDIR;
 
 my $REPOLOGY_API_ROOT = 'https://repology.org/api/v1/project';
-my $USERAGENT
-    = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
-my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
+my @HASHTYPES         = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 
 my $opt_ship   = 0;
 my $opt_remote = 'origin';
@@ -126,13 +125,15 @@ sub parse_repology ($arr) {
     return map { split ': ', $_, 2 } @$arr;
 }
 
-sub query_repology ($filters) {
+sub query_repology ( $ua, $filters ) {
     my $project = $filters->{'project'};
     delete $filters->{'project'};
+    $ua->agent(
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+    );
 
-    my $response
-        = qx(curl -H 'User-Agent: $USERAGENT' -s '$REPOLOGY_API_ROOT/$project');
-    return $response;
+    my $response = $ua->get("$REPOLOGY_API_ROOT/$project");
+    return $response->decoded_content if $response;
 }
 
 sub repology_get_newestver ( $response, $filters, $oldver ) {
@@ -146,30 +147,40 @@ sub repology_get_newestver ( $response, $filters, $oldver ) {
             }
         }
         next unless Compare \%filtered, $filters;
-        my $newver = $entry->{'version'} || "";
+        my $newver = $entry->{'version'};
         if ( $entry->{'status'} eq 'newest' ) {
             return $newver;
         }
-        {
-            no autodie 'system';
-            system "dpkg --compare-versions $newver gt $oldver";
-            next unless $? == 0;
-        }
+
+        no autodie 'system';
+        system "dpkg --compare-versions $newver gt $oldver";
+        $? == 0 or next;
+
         return $newver;
     }
     throw 'find Repology entry that meets the requirements';
 }
 
-sub fetch_sources ( $pkgdir, $sources, $lines ) {
+sub fetch_source_entry ( $ua, $entry ) {
+    my $url  = $entry->{'url'};
+    my $file = basename $url;
+    msg "fetching $url as $file...";
+
+    my $response = $ua->get($url);
+    throw "fetch $url" unless $response->is_success;
+
+    open my $fh, '>', $file;
+    print $fh $response->decoded_content or throw "write to $file";
+    close $fh;
+
+    return $file;
+}
+
+sub fetch_sources ( $ua, $pkgdir, $sources, $lines ) {
     my @lines = @$lines;
     local $CWD = $pkgdir;
     for my $entry (@$sources) {
-        my $url  = $entry->{'url'};
-        my $file = basename $url;
-        msg "fetching $url as $file...";
-
-        system qq(curl -fS#L -o "$file" "$url");
-        throw "fetch $url" unless $? == 0;
+        my $file = fetch_source_entry $ua, $entry;
         for my $hashtype (@HASHTYPES) {
             my $oldhash = $entry->{$hashtype};
             defined $oldhash or next;
@@ -201,6 +212,7 @@ sub main ($infile) {
     msg "found pkgver: $pkgver";
 
     my $newestver;
+    my $ua = LWP::UserAgent->new( show_progress => 1 );
     if ($opt_custom_version) {
         $newestver = $opt_custom_version;
     }
@@ -213,7 +225,7 @@ sub main ($infile) {
         my %repology_filters = parse_repology \@repology;
 
         msg 'querying Repology...';
-        my $response = query_repology \%repology_filters;
+        my $response = query_repology $ua, \%repology_filters;
         $newestver = repology_get_newestver $response, \%repology_filters,
             $pkgver;
     }
@@ -265,7 +277,7 @@ sub main ($infile) {
 
     msg "Fetching sources for $pkgname...";
     my $pkgdir = tempdir "$pkgname.XXXXXX", DIR => $PACUP_DIR;
-    @lines = fetch_sources $pkgdir, \@allSources, \@lines;
+    @lines = fetch_sources $ua, $pkgdir, \@allSources, \@lines;
 
     msg "updating $pacscript...";
     {
