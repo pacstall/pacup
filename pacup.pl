@@ -3,11 +3,9 @@ our $VERSION = '0.0.1';
 
 use strict;
 use warnings;
-use autodie qw(:all);
 use feature qw(say signatures);
 no warnings qw(experimental::signatures);
 
-#use Carp 'croak';
 use Data::Compare;
 use Data::Dumper;
 use File::Basename 'basename';
@@ -20,7 +18,7 @@ use JSON 'decode_json';
 use LWP::UserAgent;
 
 my $SCRIPT    = basename $0;
-my $TMPDIR    = ( $ENV{'TMPDIR'} or '/tmp' );
+my $TMPDIR    = $ENV{'TMPDIR'} || '/tmp';
 my $PACUP_DIR = tempdir 'pacup.XXXXXX', DIR => $TMPDIR;
 
 my $REPOLOGY_API_ROOT = 'https://repology.org/api/v1/project';
@@ -42,7 +40,7 @@ sub msg ($text) {
 sub ask ($text) {
     print "$SCRIPT: $text [y/N] ";
     chomp( my $answer = <STDIN> );
-    return 1 if ( lc $answer ) =~ /ye?s?/;
+    return $answer =~ /ye?s?/i;
 }
 
 END {
@@ -133,7 +131,8 @@ sub query_repology ( $ua, $filters ) {
     );
 
     my $response = $ua->get("$REPOLOGY_API_ROOT/$project");
-    return $response->decoded_content if $response;
+    throw 'fetch repology' unless $response->is_success;
+    return $response->decoded_content;
 }
 
 sub repology_get_newestver ( $response, $filters, $oldver ) {
@@ -161,31 +160,36 @@ sub repology_get_newestver ( $response, $filters, $oldver ) {
     throw 'find Repology entry that meets the requirements';
 }
 
-sub fetch_source_entry ( $ua, $entry ) {
-    my $url  = $entry->{'url'};
-    my $file = basename $url;
-    msg "fetching $url as $file...";
-
+sub fetch_source_entry ( $ua, $url, $outfile ) {
     my $response = $ua->get($url);
     throw "fetch $url" unless $response->is_success;
 
-    open my $fh, '>', $file;
-    print $fh $response->decoded_content or throw "write to $file";
+    open my $fh, '>', $outfile;
+    print $fh $response->decoded_content or throw "write to $outfile";
     close $fh;
 
-    return $file;
+    return $outfile;
+}
+
+sub calculate_hash ( $file, $hashtype ) {
+    my $output = qx(${hashtype}sum $file)
+        or throw "calculate ${hashtype}sum of $file";
+    my ($hash) = split ' ', $output;
+    return $hash;
 }
 
 sub fetch_sources ( $ua, $pkgdir, $sources, $lines ) {
     my @lines = @$lines;
     local $CWD = $pkgdir;
     for my $entry (@$sources) {
-        my $file = fetch_source_entry $ua, $entry;
+        my $url  = $entry->{'url'};
+        my $file = basename $url;
+        msg "fetching $url as $file...";
+        fetch_source_entry $ua, $url, $file;
         for my $hashtype (@HASHTYPES) {
-            my $oldhash = $entry->{$hashtype};
-            defined $oldhash or next;
+            my $oldhash = $entry->{$hashtype} || next;
             msg "calculating $hashtype for $file...";
-            my ($newhash) = split ' ', qx(${hashtype}sum $file);
+            my $newhash = calculate_hash $file, $hashtype;
             s/$oldhash/$newhash/ for @lines;
         }
     }
