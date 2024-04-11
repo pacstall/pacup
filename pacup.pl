@@ -151,7 +151,6 @@ sub repology_get_newestver ( $response, $filters, $oldver ) {
             return $newver;
         }
 
-        no autodie 'system';
         system "dpkg --compare-versions $newver gt $oldver";
         $? == 0 or next;
 
@@ -235,11 +234,8 @@ sub main ($infile) {
     }
     msg "current version: $pkgver";
     msg "newest version: $newestver";
-    {
-        no autodie 'system';
-        system "dpkg --compare-versions $pkgver ge $newestver";
-        msg 'nothing to do' and return 1 if $? == 0;
-    }
+    system "dpkg --compare-versions $pkgver ge $newestver";
+    msg 'nothing to do' and return 1 if $? == 0;
 
     msg 'updating pkgver...';
     s/\Q$pkgver\E/$newestver/ for @lines;
@@ -291,10 +287,7 @@ sub main ($infile) {
     }
 
     msg "installing from $pacscript...";
-    {
-        no autodie 'system';
-        system "pacstall -PI $infile";
-    }
+    system "pacstall -PI $infile";
 
     return   unless ask "does $pkgname work?";
     return 1 unless $opt_ship;
