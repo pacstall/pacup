@@ -13,5 +13,6 @@ source=("https://github.com/vigress8/pacup.pl.git")
 maintainer=("vigress8 <vig@disroot.org>")
 
 package() {
+  cd "${gives}"
   install -Dm755 pacup.pl -t "$pkgdir/usr/bin"
 }
