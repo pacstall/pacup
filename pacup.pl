@@ -16,6 +16,7 @@ use File::Path qw(make_path rmtree);
 use File::Temp 'tempdir';
 use Getopt::Long;
 use JSON 'decode_json';
+use IPC::System::Simple qw(run EXIT_ANY);
 
 my $SCRIPT    = basename $0;
 my $TMPDIR    = ( $ENV{'TMPDIR'} or '/tmp' );
@@ -29,6 +30,7 @@ my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 my $opt_ship   = 0;
 my $opt_remote = 'origin';
 my $opt_version;
+my $opt_force  = 0;
 
 sub throw ($action) {
     say STDERR "$SCRIPT: could not $action: $!" and exit 1;
@@ -279,18 +281,28 @@ sub main ($infile) {
     return   unless ask "does $pkgname work?";
     return 1 unless $opt_ship;
 
-    my $commit_msg = qq/upd($pkgname): `$pkgver` -> `$newestver`/;
+    my $commit_msg = qq/upd($pkgname): \\\`$pkgver\\\` -> \\\`$newestver\\\`/;
 
     system qq/git add "$infile"/;
-    system "git checkout -b ship-$pkgname master";
-    system qq/git add $infile && git commit -m "$commit_msg"/;
-    system "git push -u $opt_remote ship-$pkgname" or throw 'push changes';
+    my $current_branch = `git rev-parse --abbrev-ref HEAD`;
+    chomp($current_branch);
+    if (run(EXIT_ANY, "git show-ref --verify --quiet refs/heads/ship-$pkgname") == 0) {
+        return unless ask "Delete existing branch ship-$pkgname?";
+        if ($current_branch eq "ship-$pkgname") {
+            say "FATAL: currently on ship-$pkgname";
+            return;
+        } else {
+            system "git branch -D ship-$pkgname";
+        }
+    }
+    system "git checkout -b ship-$pkgname";
+    system qq/git commit -m "$commit_msg"/;
+    my $force = $opt_force ? '--force' : '';
+    system "git push -u $opt_remote ship-$pkgname $force";
 
-    return 1
-      unless ask
-      'create PR? (must have gh installed and authenticated to GitHub)';
-
-    system qq(gh pr create --title "$commit_msg" --body "");
+    if (ask 'create PR? (must have gh installed and authenticated to GitHub)') {
+        system qq(gh pr create --title "$commit_msg" --body "");
+    }
 
     say "$SCRIPT: done";
     return 1;
@@ -299,7 +311,8 @@ sub main ($infile) {
 GetOptions(
     'ship'      => \$opt_ship,
     'remote=s'  => \$opt_remote,
-    'version=s' => \$opt_version
+    'version=s' => \$opt_version,
+    'pushforce' => \$opt_force
 );
 
 for my $infile (@ARGV) {
