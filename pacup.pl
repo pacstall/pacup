@@ -16,8 +16,8 @@ use Getopt::Long;
 use IPC::System::Simple qw(run EXIT_ANY);
 use JSON 'decode_json';
 use LWP::UserAgent;
-use Term::ANSIColor;
 use Pod::Usage;
+use Term::ANSIColor;
 
 my $SCRIPT = basename $0;
 my $TMPDIR = $ENV{'TMPDIR'} || '/tmp';
@@ -33,60 +33,49 @@ my $opt_origin_remote = 'origin';
 my $opt_custom_version;
 my $opt_push_force = 0;
 
-sub throw ($action) {
-    say STDERR "$SCRIPT: could not $action: $!" and exit 1;
-}
-
-sub msg ($text) {
-    say "$SCRIPT: $text";
-}
-
 sub info ($text) {
-    say color('bold'), "[", color('bold green'), "+", color('reset'),
-        color('bold'),
-        "] INFO: ", color('reset'), $text;
+    say colored( '[', 'bold' ), colored( '+', 'bold green' ),
+        colored( '] INFO: ', 'bold' ), $text;
 }
 
 sub warner ($text) {
-    say color('bold'), "[", color('bold yellow'), "*", color('reset'),
-        color('bold'),
-        "] WARNING: ", color('reset'), $text;
+    say STDERR colored( '[', 'bold' ), colored( '*', 'bold yellow' ),
+        colored( '] WARNING: ', 'bold' ), $text;
 }
 
 sub error ($text) {
-    say STDERR color('bold'), "[", color('bold red'), "!", color('reset'),
-        color('bold'),
-        "] ERROR: ", color('reset'), $text;
+    say STDERR colored( '[', 'bold' ), colored( '!', 'bold red' ),
+        colored( '] ERROR: ', 'bold' ), $text;
+}
+
+sub throw ($text) {
+    error $text;
+    exit 1;
 }
 
 sub subtext ($text) {
-    say color('bold'), "    [", color('bold blue'), ">", color('reset'),
-        color('bold'),
-        "]: ", color('reset'), $text;
+    say colored( '    [', 'bold' ), colored( '>', 'bold blue' ),
+        colored( ']: ', 'bold' ), $text;
 }
 
 sub ask ($text) {
-    print "$text", color('bold'), " [", color('reset'), color('green'), "y",
-        color('reset'),
-        color('bold'), "/", color('reset'), color('bold red'), "N",
-        color('reset'), color('bold'),
-        "]", color('reset'), " ";
+    print $text, colored( ' [', 'bold' ), colored( 'y', 'green' ),
+        colored( '/', 'bold' ), colored( 'N', 'bold red' ),
+        colored( '] ', 'bold' );
     chomp( my $answer = <STDIN> );
     return $answer =~ /ye?s?/i;
 }
 
 sub ask_yes ($text) {
-    print "$text", color('bold'), " [", color('reset'), color('bold green'),
-        "Y", color('reset'),
-        color('bold'), "/", color('reset'), color('red'), "n",
-        color('reset'), color('bold'),
-        "]", color('reset'), " ";
+    print $text, colored( ' [', 'bold' ), colored( 'Y', 'bold green' ),
+        colored( '/', 'bold' ), colored( 'n', 'red' ),
+        colored( '] ', 'bold' );
     chomp( my $answer = <STDIN> );
     return !( $answer =~ /no?/i );
 }
 
 END {
-    info 'cleaning up' unless ( $opt_help || $opt_man || !@ARGV );
+    info 'Cleaning up' unless ( $opt_help || $opt_man || !@ARGV );
     rmtree $PACUP_DIR;
 }
 
@@ -163,11 +152,6 @@ sub parse_repology ($arr) {
 }
 
 sub query_repology ( $ua, $filters ) {
-    open my $oldout, ">&STDOUT" or die "Can't duplicate STDOUT: $!";
-    open my $olderr, ">&STDERR" or die "Can't duplicate STDERR: $!";
-    open STDOUT, '>', '/dev/null' or die "Can't redirect STDOUT: $!";
-    open STDERR, '>', '/dev/null' or die "Can't redirect STDERR: $!";
-
     my $project = $filters->{'project'};
     delete $filters->{'project'};
     $ua->agent(
@@ -175,12 +159,7 @@ sub query_repology ( $ua, $filters ) {
     );
 
     my $response = $ua->get("$REPOLOGY_API_ROOT/$project");
-    throw 'fetch repology' unless $response->is_success;
-
-    open STDOUT, ">&", $oldout or die "Can't restore STDOUT: $!";
-    open STDERR, ">&", $olderr or die "Can't restore STDERR: $!";
-    close $oldout;
-    close $olderr;
+    throw 'Could not fetch repology' unless $response->is_success;
 
     return $response->decoded_content;
 }
@@ -206,33 +185,24 @@ sub repology_get_newestver ( $response, $filters, $oldver ) {
 
         return $newver;
     }
-    throw 'find Repology entry that meets the requirements';
+    throw 'Could not find Repology entry that meets the requirements';
 }
 
 sub fetch_source_entry ( $ua, $url, $outfile ) {
-    open my $oldout, ">&STDOUT" or die "Can't duplicate STDOUT: $!";
-    open my $olderr, ">&STDERR" or die "Can't duplicate STDERR: $!";
-    open STDOUT, '>', '/dev/null' or die "Can't redirect STDOUT: $!";
-    open STDERR, '>', '/dev/null' or die "Can't redirect STDERR: $!";
-
     my $response = $ua->get($url);
-    throw "fetch $url" unless $response->is_success;
+    throw "Could not fetch $url" unless $response->is_success;
 
-    open my $fh, '>', $outfile;
-    print $fh $response->decoded_content or throw "write to $outfile";
-    close $fh;
-
-    open STDOUT, ">&", $oldout or die "Can't restore STDOUT: $!";
-    open STDERR, ">&", $olderr or die "Can't restore STDERR: $!";
-    close $oldout;
-    close $olderr;
+    open my $fh, '>', $outfile or throw "Could not open $outfile: $!";
+    print $fh $response->decoded_content
+        or throw "Could not write to $outfile: $!";
+    close $fh or throw "Could not close $outfile: $!";
 
     return $outfile;
 }
 
 sub calculate_hash ( $file, $hashtype ) {
     my $output = qx(${hashtype}sum $file)
-        or throw "calculate ${hashtype}sum of $file";
+        or throw "Could not calculate ${hashtype}sum of $file";
     my ($hash) = split ' ', $output;
     return $hash;
 }
@@ -247,7 +217,7 @@ sub fetch_sources ( $ua, $pkgdir, $sources, $lines ) {
         fetch_source_entry $ua, $url, $file;
         for my $hashtype (@HASHTYPES) {
             my $oldhash = $entry->{$hashtype} || next;
-            subtext "calculating ${hashtype}sum for source entry";
+            subtext "Calculating ${hashtype}sum for source entry";
             my $newhash = calculate_hash $file, $hashtype;
             s/$oldhash/$newhash/ for @lines;
         }
@@ -259,20 +229,20 @@ sub main ($infile) {
     my $pacscript = basename $infile;
     my @lines;
     {
-        open my $fh, '<', $infile;
+        open my $fh, '<', $infile or throw "Could not open $infile: $!";
         chomp( @lines = <$fh> );
-        close $fh;
+        close $fh or throw "Could not close $infile: $!";
     }
 
     info "parsing $infile";
 
     my $pkgname = getvar 'pkgname', \@lines;
-    throw 'find pkgname' unless $pkgname;
-    subtext "found pkgname: " . colored( $pkgname, 'cyan' );
+    throw 'Could not find pkgname' unless $pkgname;
+    subtext "Found pkgname: " . colored( $pkgname, 'cyan' );
 
     my $pkgver = getvar 'pkgver', \@lines;
-    throw 'find pkgver' unless $pkgver;
-    subtext "found pkgver: " . colored( $pkgver, 'yellow' );
+    throw 'Could not find pkgver' unless $pkgver;
+    subtext "Found pkgver: " . colored( $pkgver, 'yellow' );
 
     my $newestver;
     my $ua = LWP::UserAgent->new( show_progress => 1 );
@@ -280,19 +250,19 @@ sub main ($infile) {
         $newestver = $opt_custom_version;
     } else {
         my @repology = getarr 'repology', \@lines;
-        throw 'find repology' unless @repology;
+        throw 'Could not find repology' unless @repology;
         @repology = map { $_ = get_sourced $_, $infile } @repology;
-        subtext 'found repology info';
+        subtext 'Found repology info';
 
         my %repology_filters = parse_repology \@repology;
 
-        info 'querying Repology';
+        info 'Querying Repology';
         my $response = query_repology $ua, \%repology_filters;
         $newestver = repology_get_newestver $response, \%repology_filters,
             $pkgver;
     }
-    subtext "current version: " . colored( $pkgver, 'red' );
-    subtext "newest version: " . colored( $newestver, 'green' );
+    subtext "Current version: " . colored( $pkgver, 'red' );
+    subtext "Newest version: " . colored( $newestver, 'green' );
     system "dpkg --compare-versions $pkgver ge $newestver";
     info 'nothing to do' and return 1 if $? == 0;
 
@@ -300,7 +270,7 @@ sub main ($infile) {
         unless ask_yes "Proceed with updating "
         . colored( $pkgname, 'magenta' ) . " to "
         . colored( $newestver, 'green' ) . "?";
-    info 'updating pkgver';
+    info 'Updating pkgver';
     s/\Q$pkgver\E/$newestver/ for @lines;
     {
         open my $fh, '>', $infile;
@@ -329,14 +299,14 @@ sub main ($infile) {
         @sourceList = grep { $_->{'url'} =~ /pkgver/ } @sourceList;
         for my $entry (@sourceList) {
             $entry->{'url'} = get_sourced $entry->{'url'}, $infile, $arch;
-            subtext 'found source ' . colored( $entry->{'url'}, 'underline' );
+            subtext 'Found source ' . colored( $entry->{'url'}, 'underline' );
         }
 
         @sourceList = grep check_hashes, @sourceList;
 
         push @allSources, @sourceList;
     }
-    throw 'find sources' unless @allSources;
+    throw 'Could not find sources' unless @allSources;
 
     info "Fetching sources for " . colored( $pkgname, 'bold blue' );
     my $pkgdir = tempdir "$pkgname.XXXXXX", DIR => $PACUP_DIR;
@@ -344,19 +314,18 @@ sub main ($infile) {
 
     info "updating " . colored( $pacscript, 'bold yellow' );
     {
-        open my $fh, '>', $infile;
-        print $fh ( join "\n", @lines ) . "\n" or throw "write to $infile";
-        close $fh;
+        open my $fh, '>', $infile or throw "Could not open $infile: $!";
+        print $fh ( join "\n", @lines ) . "\n"
+            or throw "Could not write to $infile: $!";
+        close $fh or throw "Could not close $infile: $!";
     }
 
-    my $pacinstalled = 0;
-    if ( -e '/usr/bin/pacstall' ) { $pacinstalled = 1 }
-    if ($pacinstalled) {
-        info "installing from $pacscript";
+    if ( -x '/usr/bin/pacstall' ) {
+        info "Installing from $pacscript";
         system "pacstall -PI $infile";
         return unless ask "does $pkgname work?";
     } else {
-        warner "pacstall is not installed!";
+        warner "Pacstall is not installed or not executable!";
     }
 
     return 1 unless $opt_ship;
@@ -372,8 +341,7 @@ sub main ($infile) {
     {
         return unless ask_yes "Delete existing branch ship-$pkgname?";
         if ( $current_branch eq "ship-$pkgname" ) {
-            say "FATAL: currently on ship-$pkgname";
-            exit 1;
+            throw "Currently on ship-$pkgname";
         } else {
             system "git branch -D ship-$pkgname";
         }
@@ -384,7 +352,7 @@ sub main ($infile) {
     system "git push -u $opt_origin_remote ship-$pkgname $force";
 
     if ( ask
-        'create PR? (must have gh installed and authenticated to GitHub)' )
+        'Create PR? (must have gh installed and authenticated to GitHub)' )
     {
         system qq(gh pr create --title "$commit_msg" --body "");
     }
@@ -407,7 +375,8 @@ pod2usage( -verbose => 2 ) if $opt_man;
 pod2usage(1) if !@ARGV;
 
 for my $infile (@ARGV) {
-    -f $infile or die "$SCRIPT: $infile: not a file\n";
+    -f $infile or throw "Not a file: " . colored( $infile, 'bold' );
+    -w $infile or throw "File is not writable: " . colored( $infile, 'bold' );
     main $infile;
 }
 
