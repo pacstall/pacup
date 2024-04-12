@@ -26,8 +26,8 @@ my $PACUP_DIR = tempdir 'pacup.XXXXXX', DIR => $TMPDIR;
 my $REPOLOGY_API_ROOT = 'https://repology.org/api/v1/project';
 my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 
-my $help = 0;
-my $man = 0;
+my $opt_help = 0;
+my $opt_man = 0;
 my $opt_ship = 0;
 my $opt_origin_remote = 'origin';
 my $opt_custom_version;
@@ -86,7 +86,7 @@ sub ask_yes ($text) {
 }
 
 END {
-    info 'cleaning up' unless ( $help || $man || !@ARGV );
+    info 'cleaning up' unless ( $opt_help || $opt_man || !@ARGV );
     rmtree $PACUP_DIR;
 }
 
@@ -394,18 +394,17 @@ sub main ($infile) {
 }
 
 GetOptions(
-    'help|?' => \$help,
-    'man' => \$man,
+    'help|?' => \$opt_help,
+    'man' => \$opt_man,
     'ship' => \$opt_ship,
     'origin-remote=s' => \$opt_origin_remote,
     'custom-version|c=s' => \$opt_custom_version,
     'push-force' => \$opt_push_force,
 ) or pod2usage(2);
 
-$help = 0 if !$1;
-
-pod2usage(1) if ( $help || !@ARGV );
-pod2usage( -verbose => 2 ) if $man;
+pod2usage(0) if $opt_help;
+pod2usage( -verbose => 2 ) if $opt_man;
+pod2usage(1) if !@ARGV;
 
 for my $infile (@ARGV) {
     -f $infile or die "$SCRIPT: $infile: not a file\n";
@@ -430,13 +429,13 @@ Pacup (Pacscript Updater) is a maintainer helper tool to help maintainers update
 
 =over 4
 
-=item B<-m/--man>
-
-Display the full manpage.
-
 =item B<-h/--help>
 
 Display script usage options.
+
+=item B<-m/--man>
+
+Display the full manpage.
 
 =item B<-s/--ship>
 
