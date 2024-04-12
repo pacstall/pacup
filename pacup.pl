@@ -19,12 +19,12 @@ use LWP::UserAgent;
 use Term::ANSIColor;
 use Pod::Usage;
 
-my $SCRIPT    = basename $0;
-my $TMPDIR    = $ENV{'TMPDIR'} || '/tmp';
+my $SCRIPT = basename $0;
+my $TMPDIR = $ENV{'TMPDIR'} || '/tmp';
 my $PACUP_DIR = tempdir 'pacup.XXXXXX', DIR => $TMPDIR;
 
 my $REPOLOGY_API_ROOT = 'https://repology.org/api/v1/project';
-my @HASHTYPES         = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
+my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 
 my $help = 0;
 my $man = 0;
@@ -42,43 +42,51 @@ sub msg ($text) {
 }
 
 sub info ($text) {
-    say color('bold'), "[", color('bold green'), "+", color('reset'), color('bold'),
+    say color('bold'), "[", color('bold green'), "+", color('reset'),
+        color('bold'),
         "] INFO: ", color('reset'), $text;
 }
 
 sub warner ($text) {
-    say color('bold'), "[", color('bold yellow'), "*", color('reset'), color('bold'),
+    say color('bold'), "[", color('bold yellow'), "*", color('reset'),
+        color('bold'),
         "] WARNING: ", color('reset'), $text;
 }
 
 sub error ($text) {
-    say STDERR color('bold'), "[", color('bold red'), "!", color('reset'), color('bold'),
+    say STDERR color('bold'), "[", color('bold red'), "!", color('reset'),
+        color('bold'),
         "] ERROR: ", color('reset'), $text;
 }
 
 sub subtext ($text) {
-    say color('bold'), "    [", color('bold blue'), ">", color('reset'), color('bold'),
+    say color('bold'), "    [", color('bold blue'), ">", color('reset'),
+        color('bold'),
         "]: ", color('reset'), $text;
 }
 
 sub ask ($text) {
-    print "$text", color('bold'), " [", color('reset'), color('green'), "y", color('reset'),
-        color('bold'), "/", color('reset'), color('bold red'), "N", color('reset'), color('bold'),
+    print "$text", color('bold'), " [", color('reset'), color('green'), "y",
+        color('reset'),
+        color('bold'), "/", color('reset'), color('bold red'), "N",
+        color('reset'), color('bold'),
         "]", color('reset'), " ";
     chomp( my $answer = <STDIN> );
     return $answer =~ /ye?s?/i;
 }
 
 sub ask_yes ($text) {
-    print "$text", color('bold'), " [", color('reset'), color('bold green'), "Y", color('reset'),
-        color('bold'), "/", color('reset'), color('red'), "n", color('reset'), color('bold'),
+    print "$text", color('bold'), " [", color('reset'), color('bold green'),
+        "Y", color('reset'),
+        color('bold'), "/", color('reset'), color('red'), "n",
+        color('reset'), color('bold'),
         "]", color('reset'), " ";
     chomp( my $answer = <STDIN> );
-    return !($answer =~ /no?/i);
+    return !( $answer =~ /no?/i );
 }
 
 END {
-    info 'cleaning up' unless ($help || $man || !@ARGV);
+    info 'cleaning up' unless ( $help || $man || !@ARGV );
     rmtree $PACUP_DIR;
 }
 
@@ -109,8 +117,7 @@ sub geturl ($entry) {
     my $url;
     if ( $entry =~ /::/ ) {
         ( undef, $url ) = split /::/, $entry;
-    }
-    else {
+    } else {
         $url = $entry;
     }
     return $url;
@@ -126,8 +133,7 @@ sub get_sourcearr ( $carch, $lines ) {
     my @arr;
     if ( grep m/^source_$carch=\(/, @$lines ) {
         @arr = getarr "source_$carch", $lines;
-    }
-    else {
+    } else {
         @arr = getarr "source", $lines;
     }
     return @arr if @arr;
@@ -137,8 +143,7 @@ sub get_sumarr ( $hashtype, $carch, $lines ) {
     my @arr;
     if ( grep m/^${hashtype}sums_$carch=\(/, @$lines ) {
         @arr = getarr "${hashtype}sums_$carch", $lines;
-    }
-    else {
+    } else {
         @arr = getarr "${hashtype}sums", $lines;
     }
     return @arr if @arr;
@@ -236,9 +241,9 @@ sub fetch_sources ( $ua, $pkgdir, $sources, $lines ) {
     my @lines = @$lines;
     local $CWD = $pkgdir;
     for my $entry (@$sources) {
-        my $url  = $entry->{'url'};
+        my $url = $entry->{'url'};
         my $file = basename $url;
-        info "Downloading " . colored($file, 'bold magenta');
+        info "Downloading " . colored( $file, 'bold magenta' );
         fetch_source_entry $ua, $url, $file;
         for my $hashtype (@HASHTYPES) {
             my $oldhash = $entry->{$hashtype} || next;
@@ -263,18 +268,17 @@ sub main ($infile) {
 
     my $pkgname = getvar 'pkgname', \@lines;
     throw 'find pkgname' unless $pkgname;
-    subtext "found pkgname: " . colored($pkgname,'cyan');
+    subtext "found pkgname: " . colored( $pkgname, 'cyan' );
 
     my $pkgver = getvar 'pkgver', \@lines;
     throw 'find pkgver' unless $pkgver;
-    subtext "found pkgver: " . colored($pkgver,'yellow');
+    subtext "found pkgver: " . colored( $pkgver, 'yellow' );
 
     my $newestver;
     my $ua = LWP::UserAgent->new( show_progress => 1 );
     if ($opt_custom_version) {
         $newestver = $opt_custom_version;
-    }
-    else {
+    } else {
         my @repology = getarr 'repology', \@lines;
         throw 'find repology' unless @repology;
         @repology = map { $_ = get_sourced $_, $infile } @repology;
@@ -287,12 +291,15 @@ sub main ($infile) {
         $newestver = repology_get_newestver $response, \%repology_filters,
             $pkgver;
     }
-    subtext "current version: " . colored($pkgver,'red');
-    subtext "newest version: " . colored($newestver,'green');
+    subtext "current version: " . colored( $pkgver, 'red' );
+    subtext "newest version: " . colored( $newestver, 'green' );
     system "dpkg --compare-versions $pkgver ge $newestver";
     info 'nothing to do' and return 1 if $? == 0;
 
-    return 1 unless ask_yes "Proceed with updating " . colored($pkgname,'magenta') . " to " . colored($newestver,'green') . "?";
+    return 1
+        unless ask_yes "Proceed with updating "
+        . colored( $pkgname, 'magenta' ) . " to "
+        . colored( $newestver, 'green' ) . "?";
     info 'updating pkgver';
     s/\Q$pkgver\E/$newestver/ for @lines;
     {
@@ -322,7 +329,7 @@ sub main ($infile) {
         @sourceList = grep { $_->{'url'} =~ /pkgver/ } @sourceList;
         for my $entry (@sourceList) {
             $entry->{'url'} = get_sourced $entry->{'url'}, $infile, $arch;
-            subtext 'found source ' . colored($entry->{'url'}, 'underline');
+            subtext 'found source ' . colored( $entry->{'url'}, 'underline' );
         }
 
         @sourceList = grep check_hashes, @sourceList;
@@ -331,11 +338,11 @@ sub main ($infile) {
     }
     throw 'find sources' unless @allSources;
 
-    info "Fetching sources for " . colored($pkgname,'bold blue');
+    info "Fetching sources for " . colored( $pkgname, 'bold blue' );
     my $pkgdir = tempdir "$pkgname.XXXXXX", DIR => $PACUP_DIR;
     @lines = fetch_sources $ua, $pkgdir, \@allSources, \@lines;
 
-    info "updating " . colored($pacscript,'bold yellow');
+    info "updating " . colored( $pacscript, 'bold yellow' );
     {
         open my $fh, '>', $infile;
         print $fh ( join "\n", @lines ) . "\n" or throw "write to $infile";
@@ -343,12 +350,14 @@ sub main ($infile) {
     }
 
     my $pacinstalled = 0;
-    if (-e '/usr/bin/pacstall') { $pacinstalled = 1 };
+    if ( -e '/usr/bin/pacstall' ) { $pacinstalled = 1 }
     if ($pacinstalled) {
         info "installing from $pacscript";
         system "pacstall -PI $infile";
-        return   unless ask "does $pkgname work?";
-    } else { warner "pacstall is not installed!" }
+        return unless ask "does $pkgname work?";
+    } else {
+        warner "pacstall is not installed!";
+    }
 
     return 1 unless $opt_ship;
 
@@ -365,8 +374,7 @@ sub main ($infile) {
         if ( $current_branch eq "ship-$pkgname" ) {
             say "FATAL: currently on ship-$pkgname";
             exit 1;
-        }
-        else {
+        } else {
             system "git branch -D ship-$pkgname";
         }
     }
@@ -386,18 +394,18 @@ sub main ($infile) {
 }
 
 GetOptions(
-    'help|?'             => \$help,
-    'man'                => \$man,
-    'ship'               => \$opt_ship,
-    'origin-remote=s'    => \$opt_origin_remote,
+    'help|?' => \$help,
+    'man' => \$man,
+    'ship' => \$opt_ship,
+    'origin-remote=s' => \$opt_origin_remote,
     'custom-version|c=s' => \$opt_custom_version,
-    'push-force'         => \$opt_push_force,
+    'push-force' => \$opt_push_force,
 ) or pod2usage(2);
 
 $help = 0 if !$1;
 
-pod2usage(1) if ($help || !@ARGV);
-pod2usage(-verbose => 2) if $man;
+pod2usage(1) if ( $help || !@ARGV );
+pod2usage( -verbose => 2 ) if $man;
 
 for my $infile (@ARGV) {
     -f $infile or die "$SCRIPT: $infile: not a file\n";
