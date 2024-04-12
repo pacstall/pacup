@@ -43,7 +43,7 @@ sub query_repology ( $ua, $filters ) {
 sub repology_get_newestver ( $response, $filters, $oldver ) {
     my $decoded = decode_json $response;
     for my $entry (@$decoded) {
-        next if grep /^$entry->{'repo'}$/, @banned_repos;
+        next if grep /^$entry->{'repo'}$/, @BANNED_REPOS;
 
         my %filtered;
         for my $key (%$filters) {
