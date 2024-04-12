@@ -16,6 +16,8 @@ use Getopt::Long;
 use IPC::System::Simple qw(run EXIT_ANY);
 use JSON 'decode_json';
 use LWP::UserAgent;
+use Term::ANSIColor;
+use Pod::Usage;
 
 my $SCRIPT    = basename $0;
 my $TMPDIR    = $ENV{'TMPDIR'} || '/tmp';
@@ -24,8 +26,10 @@ my $PACUP_DIR = tempdir 'pacup.XXXXXX', DIR => $TMPDIR;
 my $REPOLOGY_API_ROOT = 'https://repology.org/api/v1/project';
 my @HASHTYPES         = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 
-my $opt_ship   = 0;
-my $opt_remote = 'origin';
+my $help = 0;
+my $man = 0;
+my $opt_ship = 0;
+my $opt_origin_remote = 'origin';
 my $opt_custom_version;
 my $opt_push_force = 0;
 
@@ -37,14 +41,44 @@ sub msg ($text) {
     say "$SCRIPT: $text";
 }
 
+sub info ($text) {
+    say color('bold'), "[", color('bold green'), "+", color('reset'), color('bold'),
+        "] INFO: ", color('reset'), $text;
+}
+
+sub warner ($text) {
+    say color('bold'), "[", color('bold yellow'), "*", color('reset'), color('bold'),
+        "] WARNING: ", color('reset'), $text;
+}
+
+sub error ($text) {
+    say STDERR color('bold'), "[", color('bold red'), "!", color('reset'), color('bold'),
+        "] ERROR: ", color('reset'), $text;
+}
+
+sub subtext ($text) {
+    say color('bold'), "    [", color('bold blue'), ">", color('reset'), color('bold'),
+        "]: ", color('reset'), $text;
+}
+
 sub ask ($text) {
-    print "$SCRIPT: $text [y/N] ";
+    print "$text", color('bold'), " [", color('reset'), color('green'), "y", color('reset'),
+        color('bold'), "/", color('reset'), color('bold red'), "N", color('reset'), color('bold'),
+        "]", color('reset'), " ";
     chomp( my $answer = <STDIN> );
     return $answer =~ /ye?s?/i;
 }
 
+sub ask_yes ($text) {
+    print "$text", color('bold'), " [", color('reset'), color('bold green'), "Y", color('reset'),
+        color('bold'), "/", color('reset'), color('red'), "n", color('reset'), color('bold'),
+        "]", color('reset'), " ";
+    chomp( my $answer = <STDIN> );
+    return !($answer =~ /no?/i);
+}
+
 END {
-    msg 'cleaning up...';
+    info 'cleaning up' unless ($help || $man || !@ARGV);
     rmtree $PACUP_DIR;
 }
 
@@ -124,6 +158,11 @@ sub parse_repology ($arr) {
 }
 
 sub query_repology ( $ua, $filters ) {
+    open my $oldout, ">&STDOUT" or die "Can't duplicate STDOUT: $!";
+    open my $olderr, ">&STDERR" or die "Can't duplicate STDERR: $!";
+    open STDOUT, '>', '/dev/null' or die "Can't redirect STDOUT: $!";
+    open STDERR, '>', '/dev/null' or die "Can't redirect STDERR: $!";
+
     my $project = $filters->{'project'};
     delete $filters->{'project'};
     $ua->agent(
@@ -132,6 +171,12 @@ sub query_repology ( $ua, $filters ) {
 
     my $response = $ua->get("$REPOLOGY_API_ROOT/$project");
     throw 'fetch repology' unless $response->is_success;
+
+    open STDOUT, ">&", $oldout or die "Can't restore STDOUT: $!";
+    open STDERR, ">&", $olderr or die "Can't restore STDERR: $!";
+    close $oldout;
+    close $olderr;
+
     return $response->decoded_content;
 }
 
@@ -160,12 +205,22 @@ sub repology_get_newestver ( $response, $filters, $oldver ) {
 }
 
 sub fetch_source_entry ( $ua, $url, $outfile ) {
+    open my $oldout, ">&STDOUT" or die "Can't duplicate STDOUT: $!";
+    open my $olderr, ">&STDERR" or die "Can't duplicate STDERR: $!";
+    open STDOUT, '>', '/dev/null' or die "Can't redirect STDOUT: $!";
+    open STDERR, '>', '/dev/null' or die "Can't redirect STDERR: $!";
+
     my $response = $ua->get($url);
     throw "fetch $url" unless $response->is_success;
 
     open my $fh, '>', $outfile;
     print $fh $response->decoded_content or throw "write to $outfile";
     close $fh;
+
+    open STDOUT, ">&", $oldout or die "Can't restore STDOUT: $!";
+    open STDERR, ">&", $olderr or die "Can't restore STDERR: $!";
+    close $oldout;
+    close $olderr;
 
     return $outfile;
 }
@@ -183,11 +238,11 @@ sub fetch_sources ( $ua, $pkgdir, $sources, $lines ) {
     for my $entry (@$sources) {
         my $url  = $entry->{'url'};
         my $file = basename $url;
-        msg "fetching $url as $file...";
+        info "Downloading " . colored($file, 'bold magenta');
         fetch_source_entry $ua, $url, $file;
         for my $hashtype (@HASHTYPES) {
             my $oldhash = $entry->{$hashtype} || next;
-            msg "calculating $hashtype for $file...";
+            subtext "calculating ${hashtype}sum for source entry";
             my $newhash = calculate_hash $file, $hashtype;
             s/$oldhash/$newhash/ for @lines;
         }
@@ -204,15 +259,15 @@ sub main ($infile) {
         close $fh;
     }
 
-    msg "parsing $infile...";
+    info "parsing $infile";
 
     my $pkgname = getvar 'pkgname', \@lines;
     throw 'find pkgname' unless $pkgname;
-    msg "found pkgname: $pkgname";
+    subtext "found pkgname: " . colored($pkgname,'cyan');
 
     my $pkgver = getvar 'pkgver', \@lines;
     throw 'find pkgver' unless $pkgver;
-    msg "found pkgver: $pkgver";
+    subtext "found pkgver: " . colored($pkgver,'yellow');
 
     my $newestver;
     my $ua = LWP::UserAgent->new( show_progress => 1 );
@@ -223,21 +278,22 @@ sub main ($infile) {
         my @repology = getarr 'repology', \@lines;
         throw 'find repology' unless @repology;
         @repology = map { $_ = get_sourced $_, $infile } @repology;
-        msg 'found repology';
+        subtext 'found repology info';
 
         my %repology_filters = parse_repology \@repology;
 
-        msg 'querying Repology...';
+        info 'querying Repology';
         my $response = query_repology $ua, \%repology_filters;
         $newestver = repology_get_newestver $response, \%repology_filters,
             $pkgver;
     }
-    msg "current version: $pkgver";
-    msg "newest version: $newestver";
+    subtext "current version: " . colored($pkgver,'red');
+    subtext "newest version: " . colored($newestver,'green');
     system "dpkg --compare-versions $pkgver ge $newestver";
-    msg 'nothing to do' and return 1 if $? == 0;
+    info 'nothing to do' and return 1 if $? == 0;
 
-    msg 'updating pkgver...';
+    return 1 unless ask_yes "Proceed with updating " . colored($pkgname,'magenta') . " to " . colored($newestver,'green') . "?";
+    info 'updating pkgver';
     s/\Q$pkgver\E/$newestver/ for @lines;
     {
         open my $fh, '>', $infile;
@@ -266,7 +322,7 @@ sub main ($infile) {
         @sourceList = grep { $_->{'url'} =~ /pkgver/ } @sourceList;
         for my $entry (@sourceList) {
             $entry->{'url'} = get_sourced $entry->{'url'}, $infile, $arch;
-            msg 'found source url: ' . $entry->{'url'};
+            subtext 'found source ' . colored($entry->{'url'}, 'underline');
         }
 
         @sourceList = grep check_hashes, @sourceList;
@@ -275,21 +331,25 @@ sub main ($infile) {
     }
     throw 'find sources' unless @allSources;
 
-    msg "Fetching sources for $pkgname...";
+    info "Fetching sources for " . colored($pkgname,'bold blue');
     my $pkgdir = tempdir "$pkgname.XXXXXX", DIR => $PACUP_DIR;
     @lines = fetch_sources $ua, $pkgdir, \@allSources, \@lines;
 
-    msg "updating $pacscript...";
+    info "updating " . colored($pacscript,'bold yellow');
     {
         open my $fh, '>', $infile;
         print $fh ( join "\n", @lines ) . "\n" or throw "write to $infile";
         close $fh;
     }
 
-    msg "installing from $pacscript...";
-    system "pacstall -PI $infile";
+    my $pacinstalled = 0;
+    if (-e '/usr/bin/pacstall') { $pacinstalled = 1 };
+    if ($pacinstalled) {
+        info "installing from $pacscript";
+        system "pacstall -PI $infile";
+        return   unless ask "does $pkgname work?";
+    } else { warner "pacstall is not installed!" }
 
-    return   unless ask "does $pkgname work?";
     return 1 unless $opt_ship;
 
     my $commit_msg = qq/upd($pkgname): \\\`$pkgver\\\` -> \\\`$newestver\\\`/;
@@ -301,7 +361,7 @@ sub main ($infile) {
             "git show-ref --verify --quiet refs/heads/ship-$pkgname" ) == 0
         )
     {
-        return unless ask "Delete existing branch ship-$pkgname?";
+        return unless ask_yes "Delete existing branch ship-$pkgname?";
         if ( $current_branch eq "ship-$pkgname" ) {
             say "FATAL: currently on ship-$pkgname";
             exit 1;
@@ -313,7 +373,7 @@ sub main ($infile) {
     system "git checkout -b ship-$pkgname";
     system qq/git commit -m "$commit_msg"/;
     my $force = $opt_push_force ? '--force' : '';
-    system "git push -u $opt_remote ship-$pkgname $force";
+    system "git push -u $opt_origin_remote ship-$pkgname $force";
 
     if ( ask
         'create PR? (must have gh installed and authenticated to GitHub)' )
@@ -321,20 +381,85 @@ sub main ($infile) {
         system qq(gh pr create --title "$commit_msg" --body "");
     }
 
-    say "$SCRIPT: done";
+    info "done!";
     return 1;
 }
 
 GetOptions(
+    'help|?'             => \$help,
+    'man'                => \$man,
     'ship'               => \$opt_ship,
-    'remote=s'           => \$opt_remote,
+    'origin-remote=s'    => \$opt_origin_remote,
     'custom-version|c=s' => \$opt_custom_version,
     'push-force'         => \$opt_push_force,
-);
+) or pod2usage(2);
+
+$help = 0 if !$1;
+
+pod2usage(1) if ($help || !@ARGV);
+pod2usage(-verbose => 2) if $man;
 
 for my $infile (@ARGV) {
     -f $infile or die "$SCRIPT: $infile: not a file\n";
     main $infile;
 }
+
+__END__
+
+=head1 NAME
+
+pacup - Pacscript Updater
+
+=head1 SYNOPSIS
+
+pacup [options]
+
+=head1 DESCRIPTION
+
+Pacup (Pacscript Updater) is a maintainer helper tool to help maintainers update their pacscripts. It semi-automates the tedious task of updating pacscripts, and aims to make it a fun process for the maintainer! Originally written in Python, now in Perl.
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-m/--man>
+
+Display the full manpage.
+
+=item B<-h/--help>
+
+Display script usage options.
+
+=item B<-s/--ship>
+
+Create a new branch and push the changes to git.
+
+=item B<-o/--origin-remote>
+
+Specify the remote repository. Default is 'origin'.
+
+=item B<-c/--custom-version>
+
+Set a custom version for the package to fetch, instead of querying Repology.
+
+=item B<-p/--push-force>
+
+Force push to the branch, overwriting any existing one.
+
+=back
+
+=head1 EXAMPLE
+
+    pacup -s packages/github-desktop-deb/github-desktop-deb.pacscript
+
+=head1 AUTHOR
+
+[vigress8] - <vig@disroot.org>
+
+=head1 VERSION
+
+Pacup (Perl edition) version 0.0.1
+
+=cut
 
 # vim: set ts=4 sw=4 et:
