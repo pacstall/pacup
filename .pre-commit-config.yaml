@@ -1,5 +1,8 @@
 ci:
-  skip: [perltidy]
+  skip: [
+    manifest,
+    perltidy,
+  ]
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -11,6 +14,10 @@ repos:
         args: [--fix=lf]
   - repo: local
     hooks:
+      - id: manifest
+        name: update MANIFEST
+        entry: make manifest
+        language: system
       - id: perltidy
         name: perltidy
         description: Run the perltidy source code formatter on Perl source files

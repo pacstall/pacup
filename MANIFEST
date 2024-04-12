@@ -1,5 +1,6 @@
 bin/pacup
 lib/Pacup/Parser.pm
+lib/Pacup/Repology.pm
 lib/Pacup/Util.pm
 LICENSE
 Makefile.PL

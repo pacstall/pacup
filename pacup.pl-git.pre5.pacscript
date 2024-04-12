@@ -12,7 +12,11 @@ depends=(
 url="https://github.com/vigress8/pacup.pl.git"
 maintainer="vigress8 <vig@disroot.org>"
 
-package() {
+build() {
   perl Makefile.PL
+  make -j"${NCPU}"
+}
+
+package() {
   sudo make install DESTDIR="${pkgdir}"
 }
