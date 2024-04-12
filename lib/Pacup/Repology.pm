@@ -13,6 +13,9 @@ use base 'Exporter';
 our @EXPORT = qw(parse_repology query_repology repology_get_newestver);
 
 my $REPOLOGY_API_ROOT = 'https://repology.org/api/v1/project';
+
+# List of repositories not to be used for version detection.
+# As can be inferred, we don't like Windows versions.
 my @BANNED_REPOS = qw(
     appget
     baulk
