@@ -6,7 +6,8 @@ use feature qw(signatures);
 no warnings qw(experimental::signatures);
 
 use base 'Exporter';
-our @EXPORT = qw(check_hashes getarr get_sourcearr get_sourced get_sumarr geturl getvar @HASHTYPES);
+our @EXPORT
+    = qw(check_hashes getarr get_sourcearr get_sourced get_sumarr geturl getvar @HASHTYPES);
 
 my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 
@@ -77,4 +78,3 @@ sub check_hashes {
     }
     return 1;
 }
-
