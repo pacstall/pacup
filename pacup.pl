@@ -19,7 +19,6 @@ use LWP::UserAgent;
 use Pod::Usage;
 use Term::ANSIColor;
 
-my $SCRIPT = basename $0;
 my $TMPDIR = $ENV{'TMPDIR'} || '/tmp';
 my $PACUP_DIR = tempdir 'pacup.XXXXXX', DIR => $TMPDIR;
 
@@ -27,7 +26,6 @@ my $REPOLOGY_API_ROOT = 'https://repology.org/api/v1/project';
 my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 
 my $opt_help = 0;
-my $opt_man = 0;
 my $opt_ship = 0;
 my $opt_origin_remote = 'origin';
 my $opt_custom_version;
@@ -55,7 +53,7 @@ sub throw ($text) {
 
 sub subtext ($text) {
     say colored( '    [', 'bold' ), colored( '>', 'bold blue' ),
-        colored( ']: ', 'bold' ), $text;
+        colored( '] ', 'bold' ), $text;
 }
 
 sub ask ($text) {
@@ -75,8 +73,25 @@ sub ask_yes ($text) {
 }
 
 END {
-    info 'Cleaning up' unless ( $opt_help || $opt_man || !@ARGV );
+    info 'Cleaning up' unless ( $opt_help || !@ARGV );
     rmtree $PACUP_DIR;
+}
+
+sub check_deps {
+    my @deps = qw(dpkg git sha256sum);
+    my $path = $ENV{'PATH'} || '/bin:/usr/bin';
+    my @pathdirs = split /:/, $path;
+    for my $dep (@deps) {
+        my $found = 0;
+        for my $dir (@pathdirs) {
+            my $try_path = $dir . '/' . $dep;
+            next unless -x $try_path;
+            $found = 1;
+            last;
+        }
+        throw 'Dependency ' . colored( $dep, 'bold' ) . ' not found'
+            unless $found;
+    }
 }
 
 sub getvar ( $name, $lines ) {
@@ -226,6 +241,9 @@ sub fetch_sources ( $ua, $pkgdir, $sources, $lines ) {
 }
 
 sub main ($infile) {
+    -f $infile or throw "Not a file: " . colored( $infile, 'bold' );
+    -w $infile or throw "File is not writable: " . colored( $infile, 'bold' );
+
     my $pacscript = basename $infile;
     my @lines;
     {
@@ -363,7 +381,6 @@ sub main ($infile) {
 
 GetOptions(
     'help|?' => \$opt_help,
-    'man' => \$opt_man,
     'ship' => \$opt_ship,
     'origin-remote=s' => \$opt_origin_remote,
     'custom-version|c=s' => \$opt_custom_version,
@@ -371,12 +388,10 @@ GetOptions(
 ) or pod2usage(2);
 
 pod2usage(0) if $opt_help;
-pod2usage( -verbose => 2 ) if $opt_man;
 pod2usage(1) if !@ARGV;
 
+check_deps();
 for my $infile (@ARGV) {
-    -f $infile or throw "Not a file: " . colored( $infile, 'bold' );
-    -w $infile or throw "File is not writable: " . colored( $infile, 'bold' );
     main $infile;
 }
 
@@ -398,27 +413,23 @@ Pacup (Pacscript Updater) is a maintainer helper tool to help maintainers update
 
 =over 4
 
-=item B<-h/--help>
+=item B<-h, -?, --help>
 
-Display script usage options.
+Print this help message.
 
-=item B<-m/--man>
-
-Display the full manpage.
-
-=item B<-s/--ship>
+=item B<-s, --ship>
 
 Create a new branch and push the changes to git.
 
-=item B<-o/--origin-remote>
+=item B<-o, --origin-remote>
 
 Specify the remote repository. Default is 'origin'.
 
-=item B<-c/--custom-version>
+=item B<-c, --custom-version>
 
 Set a custom version for the package to fetch, instead of querying Repology.
 
-=item B<-p/--push-force>
+=item B<-p, --push-force>
 
 Force push to the branch, overwriting any existing one.
 
@@ -430,7 +441,7 @@ Force push to the branch, overwriting any existing one.
 
 =head1 AUTHOR
 
-[vigress8] - <vig@disroot.org>
+Vigress - <vig@disroot.org>
 
 =head1 VERSION
 
