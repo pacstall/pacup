@@ -1,6 +1,6 @@
 pkgname="pacup.pl-git"
 gives="pacup.pl"
-pkgver="20240404"
+pkgver="20240412"
 pkgdesc="Next-gen rewrite of Pacup"
 depends=(
   'libdata-compare-perl'
@@ -14,5 +14,6 @@ maintainer=("vigress8 <vig@disroot.org>")
 
 package() {
   cd "${gives}"
-  install -Dm755 pacup.pl -t "$pkgdir/usr/bin"
+  perl Makefile.PL
+  make install DESTDIR="${pkgdir}"
 }
