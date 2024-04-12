@@ -1,0 +1,6 @@
+--perl-best-practices
+--nostandard-output
+--standard-error-output
+--warning-output
+--cuddled-else
+--no-valign

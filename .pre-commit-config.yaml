@@ -1,3 +1,6 @@
+ci:
+  skip: [perltidy]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
@@ -5,7 +8,7 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: mixed-line-ending
-        args: ["--fix=lf"]
+        args: [--fix=lf]
   - repo: local
     hooks:
       - id: perltidy
@@ -13,11 +16,8 @@ repos:
         description: Run the perltidy source code formatter on Perl source files
         entry: perltidy
         args: [
-          --perl-best-practices,
-          --nostandard-output,
-          --standard-error-output,
           --backup-and-modify-in-place,
-          --backup-file-extension=/
+          --backup-file-extension=/,
         ]
         language: perl
         types: [perl]
