@@ -1,21 +1,21 @@
-let
-  nixpkgs = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-23.11";
-  pkgs = import nixpkgs { config = {}; overlays = []; };
-in
+{ pkgs
+  ? import <nixpkgs> { config = {}; overlays = []; }
+}:
 
 pkgs.mkShellNoCC {
-  packages = with pkgs; [
-    perl
-    perlPackages.DataCompare
-    perl538Packages.JSON
-    perl538Packages.Filechdir
-    perl538Packages.IPCSystemSimple
-    perl538Packages.TestLWPUserAgent
-  ];
+  packages = with pkgs; [ perl ]
+  ++ (with pkgs.perl538Packages; [
+    DataCompare
+    Filechdir
+    IPCSystemSimple
+    JSON
+    ListMoreUtils
+    TestLWPUserAgent
+  ]);
 
-  LC_ALL="C";
-
+  LC_ALL = "C";
   shellHook = ''
-    export PERL5LIB="$PERL5LIB:$PWD/lib"
+    export PATH="${./bin}:$PATH"
+    export PERL5LIB="${./lib}:$PERL5LIB"
   '';
 }

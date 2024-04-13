@@ -1,6 +1,5 @@
 ci:
   skip: [
-    manifest,
     perltidy,
   ]
 
@@ -8,16 +7,13 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
-      - id: trailing-whitespace
+      - id: check-yaml
       - id: end-of-file-fixer
       - id: mixed-line-ending
         args: [--fix=lf]
+      - id: trailing-whitespace
   - repo: local
     hooks:
-      - id: manifest
-        name: update MANIFEST
-        entry: perl Makefile.PL && make manifest
-        language: system
       - id: perltidy
         name: perltidy
         description: Run the perltidy source code formatter on Perl source files
