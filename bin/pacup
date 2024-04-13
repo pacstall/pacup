@@ -26,13 +26,15 @@ my $TMPDIR = $ENV{'TMPDIR'} || '/tmp';
 my $PACUP_DIR = tempdir 'pacup.XXXXXX', DIR => $TMPDIR;
 
 my $opt_help = 0;
+my $opt_show_repology = 0;
 my $opt_ship = 0;
 my $opt_origin_remote = 'origin';
 my $opt_custom_version;
 my $opt_push_force = 0;
+my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 
 END {
-    info 'Cleaning up' unless ( $opt_help || !@ARGV );
+    info 'Cleaning up' unless ( $opt_help || $opt_show_repology || !@ARGV );
     rmtree $PACUP_DIR;
 }
 
@@ -102,7 +104,7 @@ sub main ($infile) {
         close $fh or throw "Could not close $infile: $!";
     }
 
-    info "parsing $infile";
+    info "parsing " . colored( $infile, 'underline' );
 
     my $pkgname = getvar 'pkgname', \@lines;
     throw 'Could not find pkgname' unless $pkgname;
@@ -110,29 +112,54 @@ sub main ($infile) {
 
     my $pkgver = getvar 'pkgver', \@lines;
     throw 'Could not find pkgver' unless $pkgver;
-    subtext "Found pkgver: " . colored( $pkgver, 'yellow' );
+    subtext "Found pkgver: " . colored( $pkgver, 'bright_yellow' );
+
+    my @maintainer = getarr 'maintainer', \@lines;
+    if ( !@maintainer ) {
+        warner 'Could not find maintainer';
+    } else {
+        @maintainer = map { $_ = get_sourced $_, $infile } @maintainer;
+        subtext 'Found maintainer: '
+            . colored(
+            join(
+                ', ', @maintainer
+            ),
+            'bright_magenta'
+            );
+    }
 
     my $newestver;
-    my $ua = LWP::UserAgent->new( show_progress => 1 );
+    my $ua = LWP::UserAgent->new( show_progress => 0 );
     if ($opt_custom_version) {
         $newestver = $opt_custom_version;
     } else {
         my @repology = getarr 'repology', \@lines;
         throw 'Could not find repology' unless @repology;
         @repology = map { $_ = get_sourced $_, $infile } @repology;
-        subtext 'Found repology info';
+        subtext 'Found repology info: '
+            . colored(
+            join( ', ', map { join( ':', split( ': ', $_, 2 ) ) } @repology ),
+            'bright_green'
+            );
 
         my %repology_filters = parse_repology \@repology;
 
         info 'Querying Repology';
         my $response = query_repology $ua, \%repology_filters;
-        $newestver = repology_get_newestver $response, \%repology_filters,
-            $pkgver;
+        my $action = $opt_show_repology ? 'display' : 'newestver';
+        $newestver
+            = repology_get_newestver( $response, \%repology_filters, $pkgver,
+            $action );
     }
-    subtext "Current version: " . colored( $pkgver, 'red' );
-    subtext "Newest version: " . colored( $newestver, 'green' );
+    subtext colored( "Current: ", 'bold' )
+        . colored( $pkgver, 'yellow' )
+        . colored( " ~> ", 'blue' )
+        . colored( "Latest: ", 'bold' )
+        . colored( $newestver, 'green' );
     system "dpkg --compare-versions $pkgver ge $newestver";
-    info 'nothing to do' and return 1 if $? == 0;
+    info( colored( $pkgname, 'cyan' ) . " is up to date" ) and return 1
+        if $? == 0;
+    if ($opt_show_repology) { exit(0) }
 
     return 1
         unless ask_yes "Proceed with updating "
@@ -232,6 +259,7 @@ sub main ($infile) {
 GetOptions(
     'help|?' => \$opt_help,
     'ship' => \$opt_ship,
+    'show-repology|r' => \$opt_show_repology,
     'origin-remote=s' => \$opt_origin_remote,
     'custom-version|c=s' => \$opt_custom_version,
     'push-force' => \$opt_push_force,
@@ -266,6 +294,10 @@ Pacup (Pacscript Updater) is a maintainer helper tool to help maintainers update
 =item B<-h, -?, --help>
 
 Print this help message.
+
+=item B<-r, --show-repology>
+
+Show the parsed repology data and exit.
 
 =item B<-s, --ship>
 

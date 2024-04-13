@@ -8,6 +8,7 @@ depends=(
   'libipc-system-simple-perl'
   'libjson-perl'
   'libwww-perl'
+  'liblist-moreutils-perl'
 )
 source=("https://github.com/vigress8/pacup.pl.git")
 maintainer=("vigress8 <vig@disroot.org>")

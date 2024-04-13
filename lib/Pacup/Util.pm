@@ -10,18 +10,18 @@ use base 'Exporter';
 our @EXPORT = qw(ask ask_yes error info subtext throw warner);
 
 sub info ($text) {
-    say colored( '[', 'bold' ), colored( '+', 'bold green' ),
-        colored( '] INFO: ', 'bold' ), $text;
+    say '[', colored( '+', 'bold green' ), '] ',
+        colored( 'INFO', 'bold' ), ': ', $text;
 }
 
 sub warner ($text) {
-    say STDERR colored( '[', 'bold' ), colored( '*', 'bold yellow' ),
-        colored( '] WARNING: ', 'bold' ), $text;
+    say STDERR '[', colored( '*', 'bold yellow' ), '] ',
+        colored( 'WARN', 'bold' ), ': ', $text;
 }
 
 sub error ($text) {
-    say STDERR colored( '[', 'bold' ), colored( '!', 'bold red' ),
-        colored( '] ERROR: ', 'bold' ), $text;
+    say STDERR '[', colored( '!', 'bold red' ), '] ',
+        colored( 'ERROR', 'bold' ), ': ', $text;
 }
 
 sub throw ($text) {

@@ -7,7 +7,10 @@ no warnings qw(experimental::signatures);
 
 use Pacup::Util;
 use Data::Compare;
+use List::Util 'reduce';
+use List::MoreUtils 'all';
 use JSON 'decode_json';
+use open ':std', ':encoding(UTF-8)';
 
 use base 'Exporter';
 our @EXPORT = qw(parse_repology query_repology repology_get_newestver);
@@ -43,28 +46,51 @@ sub query_repology ( $ua, $filters ) {
     return $response->decoded_content;
 }
 
-sub repology_get_newestver ( $response, $filters, $oldver ) {
-    my $decoded = decode_json $response;
-    for my $entry (@$decoded) {
-        next if grep /^$entry->{'repo'}$/, @BANNED_REPOS;
+sub repology_get_newestver ( $response, $filters, $oldver, $action ) {
+    my $decoded = decode_json($response);
+    my @filtered;
+    my %version_count;
 
-        my %filtered;
-        for my $key (%$filters) {
-            if ( exists $entry->{$key} && $entry->{$key} eq $filters->{$key} )
-            {
-                $filtered{$key} = $entry->{$key};
+    foreach my $entry (@$decoded) {
+        next if grep /^$entry->{'repo'}$/, @BANNED_REPOS;
+        my $is_match
+            = all { exists $entry->{$_} && $entry->{$_} eq $filters->{$_} }
+            keys %$filters;
+        next unless $is_match;
+        next if ( $entry->{'version'} eq 'HEAD' );
+        if ( $action eq 'display' ) {
+            my $json_text = JSON->new->pretty->encode($entry);
+            $json_text =~ s/^/\t/mg;
+            print $json_text;
+        }
+        push @filtered, $entry;
+        if ( $entry->{'status'} ne 'newest' ) {
+            next
+                unless ( $filters->{'status'}
+                && $filters->{'status'} eq 'devel' )
+                || exists $filters->{'repo'};
+        }
+        $version_count{ $entry->{'version'} }++;
+    }
+
+    my $newver = reduce {
+        my $result = system("dpkg --compare-versions $a gt $b");
+        if ( $result == 0 ) {
+            $a;
+        } else {
+            $result = system("dpkg --compare-versions $a lt $b");
+            if ( $result == 0 ) {
+                $b;
+            } else {
+                $version_count{$a} >= $version_count{$b} ? $a : $b;
             }
         }
-        next unless Compare \%filtered, $filters;
-        my $newver = $entry->{'version'};
-        if ( $entry->{'status'} eq 'newest' ) {
+    } keys %version_count;
+
+    foreach my $entry (@filtered) {
+        if ( $entry->{'version'} eq $newver ) {
             return $newver;
         }
-
-        system "dpkg --compare-versions $newver gt $oldver";
-        $? == 0 or next;
-
-        return $newver;
     }
     throw 'Could not find Repology entry that meets the requirements';
 }
