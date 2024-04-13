@@ -1,10 +1,14 @@
 { pkgs
-  ? import <nixpkgs> { config = {}; overlays = []; }
+  ? import (fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-23.11")
+  { config = {}; overlays = []; }
 }:
 
 pkgs.mkShellNoCC {
-  packages = with pkgs; [ perl ]
-  ++ (with pkgs.perl538Packages; [
+  packages = with pkgs; [
+    dpkg
+    gitMinimal
+    perl
+  ] ++ (with pkgs.perl538Packages; [
     DataCompare
     Filechdir
     IPCSystemSimple
