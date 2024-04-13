@@ -24,19 +24,19 @@ Originally written in Python, now in Perl.
 
 To install the latest release run:
 
-```console
+```bash
 $ pacstall -I pacup-bin # unreleased
 ```
 
 To install the latest development build run:
 
-```console
+```bash
 $ pacstall -I pacup-git # unreleased
 ```
 
 or
 
-```console
+```bash
 $ git clone https://github.com/pacstall/pacup.pl
 $ cd pacup.pl
 $ perl Makefile.PL
@@ -45,15 +45,14 @@ $ sudo make install
 
 To develop in a `nix` shell run:
 ```console
-$ elsie put something here
-
+$ nix-shell
 ```
 
-
+`$PATH` in the `nix-shell` is modified to include `./bin`, so `./bin/pacup` is available without using the file path.
 
 ## Usage
 
-```console
+```bash
 USAGE: pacup [OPTIONS] PACSCRIPTS...
 
 OPTIONS:
