@@ -16,7 +16,7 @@ repos:
     hooks:
       - id: manifest
         name: update MANIFEST
-        entry: make manifest
+        entry: perl Makefile.PL && make manifest
         language: system
       - id: perltidy
         name: perltidy

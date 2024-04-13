@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 package main;
-our $VERSION = '20240412';
+our $VERSION = '3.0.0';
 
 use strict;
 use warnings;
@@ -17,7 +17,7 @@ use File::chdir;
 use File::Path qw(make_path rmtree);
 use File::Temp 'tempdir';
 use Getopt::Long;
-use IPC::System::Simple qw(run EXIT_ANY);
+use IPC::System::Simple qw(capture system $EXITVAL);
 use LWP::UserAgent;
 use Pod::Usage;
 use Term::ANSIColor;
@@ -26,6 +26,7 @@ my $TMPDIR = $ENV{'TMPDIR'} || '/tmp';
 my $PACUP_DIR = tempdir 'pacup.XXXXXX', DIR => $TMPDIR;
 
 my $opt_help = 0;
+my $opt_version = 0;
 my $opt_show_repology = 0;
 my $opt_ship = 0;
 my $opt_origin_remote = 'origin';
@@ -34,8 +35,14 @@ my $opt_push_force = 0;
 my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 
 END {
-    info 'Cleaning up' unless ( $opt_help || $opt_show_repology || !@ARGV );
+    info 'Cleaning up'
+        unless ( $opt_help || $opt_version || $opt_show_repology || !@ARGV );
     rmtree $PACUP_DIR;
+}
+
+sub version_info {
+    say 'Pacup ', colored( 'v' . $VERSION, 'bold green' );
+    exit 0;
 }
 
 sub check_deps {
@@ -63,13 +70,11 @@ sub fetch_source_entry ( $ua, $url, $outfile ) {
     print $fh $response->decoded_content
         or throw "Could not write to $outfile: $!";
     close $fh or throw "Could not close $outfile: $!";
-
-    return $outfile;
 }
 
 sub calculate_hash ( $file, $hashtype ) {
-    my $output = qx(${hashtype}sum $file)
-        or throw "Could not calculate ${hashtype}sum of $file";
+    my $output = capture [ 0, 1 ], $hashtype . 'sum', ($file);
+    throw "Could not calculate ${hashtype}sum of $file" unless $EXITVAL == 0;
     my ($hash) = split ' ', $output;
     return $hash;
 }
@@ -115,17 +120,11 @@ sub main ($infile) {
     subtext "Found pkgver: " . colored( $pkgver, 'bright_yellow' );
 
     my @maintainer = getarr 'maintainer', \@lines;
-    if ( !@maintainer ) {
-        warner 'Could not find maintainer';
-    } else {
-        @maintainer = map { $_ = get_sourced $_, $infile } @maintainer;
+    if (@maintainer) {
         subtext 'Found maintainer: '
-            . colored(
-            join(
-                ', ', @maintainer
-            ),
-            'bright_magenta'
-            );
+            . colored( join( ', ', @maintainer ), 'bright_magenta' );
+    } else {
+        warner 'Could not find maintainer';
     }
 
     my $newestver;
@@ -156,10 +155,11 @@ sub main ($infile) {
         . colored( " ~> ", 'blue' )
         . colored( "Latest: ", 'bold' )
         . colored( $newestver, 'green' );
-    system "dpkg --compare-versions $pkgver ge $newestver";
+    system [ 0, 1 ], 'dpkg',
+        ( '--compare-versions', $pkgver, 'ge', $newestver );
     info( colored( $pkgname, 'cyan' ) . " is up to date" ) and return 1
-        if $? == 0;
-    if ($opt_show_repology) { exit(0) }
+        if $EXITVAL == 0;
+    return 1 if $opt_show_repology;
 
     return 1
         unless ask_yes "Proceed with updating "
@@ -168,9 +168,10 @@ sub main ($infile) {
     info 'Updating pkgver';
     s/\Q$pkgver\E/$newestver/ for @lines;
     {
-        open my $fh, '>', $infile;
-        print $fh ( join "\n", @lines ) . "\n" or throw "write to $infile";
-        close $fh;
+        open my $fh, '>', $infile or throw "Could not open $infile: $!";
+        print $fh ( join "\n", @lines ) . "\n"
+            or throw "Could not write to $infile: $!";
+        close $fh or throw "Could not close $infile: $!";
     }
 
     my @arches = getarr 'arch', \@lines;
@@ -217,7 +218,7 @@ sub main ($infile) {
 
     if ( -x '/usr/bin/pacstall' ) {
         info "Installing from $pacscript";
-        system "pacstall -PI $infile";
+        system 'pacstall', ( '--install', $infile );
         return unless ask "does $pkgname work?";
     } else {
         warner "Pacstall is not installed or not executable!";
@@ -227,37 +228,44 @@ sub main ($infile) {
 
     my $commit_msg = qq/upd($pkgname): \\\`$pkgver\\\` -> \\\`$newestver\\\`/;
 
-    system qq/git add "$infile"/;
-    my $current_branch = `git rev-parse --abbrev-ref HEAD`;
-    chomp($current_branch);
-    if (run( EXIT_ANY,
-            "git show-ref --verify --quiet refs/heads/ship-$pkgname" ) == 0
+    system 'git', ( 'add', $infile );
+    my $ship_branch = "ship-$pkgname";
+    my $current_branch = capture 'git',
+        ( 'rev-parse', '--abbrev-ref', 'HEAD' );
+    chomp $current_branch;
+    if (system( 'git',
+            ( 'show-ref', '--verify', '--quiet', "refs/heads/$ship_branch" ) )
+        == 0
         )
     {
-        return unless ask_yes "Delete existing branch ship-$pkgname?";
-        if ( $current_branch eq "ship-$pkgname" ) {
-            throw "Currently on ship-$pkgname";
+        return unless ask_yes "Delete existing branch $ship_branch?";
+        if ( $current_branch eq $ship_branch ) {
+            throw "Currently on $ship_branch";
         } else {
-            system "git branch -D ship-$pkgname";
+            system 'git', ( 'branch', '--delete', '--force', $ship_branch );
         }
     }
-    system "git checkout -b ship-$pkgname";
-    system qq/git commit -m "$commit_msg"/;
-    my $force = $opt_push_force ? '--force' : '';
-    system "git push -u $opt_origin_remote ship-$pkgname $force";
+    system 'git', ( 'checkout', '--branch', $ship_branch );
+    system 'git', ( 'commit', '--message', $commit_msg );
+    my @pushargs
+        = ( 'push', '--set-upstream', $opt_origin_remote, $ship_branch );
+    push @pushargs, '--force-with-lease' if $opt_push_force;
+    system 'git', @pushargs;
 
     if ( ask
         'Create PR? (must have gh installed and authenticated to GitHub)' )
     {
-        system qq(gh pr create --title "$commit_msg" --body "");
+        system 'gh',
+            ( 'pr', 'create', '--title', $commit_msg, '--body', '""' );
     }
 
-    info "done!";
+    info "Done!";
     return 1;
 }
 
 GetOptions(
     'help|?' => \$opt_help,
+    'version' => \$opt_version,
     'ship' => \$opt_ship,
     'show-repology|r' => \$opt_show_repology,
     'origin-remote=s' => \$opt_origin_remote,
@@ -265,6 +273,7 @@ GetOptions(
     'push-force' => \$opt_push_force,
 ) or pod2usage(2);
 
+version_info() if $opt_version;
 pod2usage(0) if $opt_help;
 pod2usage(1) if !@ARGV;
 
@@ -291,13 +300,17 @@ Pacup (Pacscript Updater) is a maintainer helper tool to help maintainers update
 
 =over 4
 
+=item B<-v, --version>
+
+Print version information and exit.
+
 =item B<-h, -?, --help>
 
-Print this help message.
+Print this help message and exit.
 
 =item B<-r, --show-repology>
 
-Show the parsed repology data and exit.
+Print the parsed repology data and exit.
 
 =item B<-s, --ship>
 
@@ -327,7 +340,7 @@ Vigress - <vig@disroot.org>
 
 =head1 VERSION
 
-Pacup (Perl edition) version 20240412
+Pacup (Perl edition) v3.0.0
 
 =cut
 

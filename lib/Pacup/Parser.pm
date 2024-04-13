@@ -5,6 +5,7 @@ use warnings;
 use feature qw(signatures);
 no warnings qw(experimental::signatures);
 
+use IPC::System::Simple qw(capture);
 use base 'Exporter';
 our @EXPORT
     = qw(check_hashes getarr get_sourcearr get_sourced get_sumarr geturl getvar @HASHTYPES);
@@ -45,8 +46,8 @@ sub geturl ($entry) {
 }
 
 sub get_sourced ( $name, $infile, $carch = 'amd64' ) {
-    my $output
-        = qx(env CARCH=$carch bash -e -c 'source "$infile" && printf \%s "$name"');
+    my $output = capture
+        qq(env CARCH=$carch bash -e -c 'source "$infile" && printf \%s "$name"');
     return $output;
 }
 
@@ -78,3 +79,5 @@ sub check_hashes {
     }
     return 1;
 }
+
+1;
