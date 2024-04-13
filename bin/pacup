@@ -34,6 +34,8 @@ my $opt_custom_version;
 my $opt_push_force = 0;
 my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 
+our @collected_files;
+
 END {
     info 'Cleaning up'
         unless ( $opt_help || $opt_version || $opt_show_repology || !@ARGV );
@@ -87,6 +89,7 @@ sub fetch_sources ( $ua, $pkgdir, $sources, $lines ) {
         my $file = basename $url;
         info "Downloading " . colored( $file, 'bold magenta' );
         fetch_source_entry $ua, $url, $file;
+        push @collected_files, "$pkgdir/$file";
         for my $hashtype (@HASHTYPES) {
             my $oldhash = $entry->{$hashtype} || next;
             subtext "Calculating ${hashtype}sum for source entry";
@@ -218,7 +221,10 @@ sub main ($infile) {
 
     if ( -x '/usr/bin/pacstall' ) {
         info "Installing from $pacscript";
+        my $payload = join(';:', @collected_files);
+        $ENV{'PACSTALL_PAYLOAD'} = $payload;
         system 'pacstall', ( '--install', $infile );
+        delete $ENV{'PACSTALL_PAYLOAD'};
         return unless ask "does $pkgname work?";
     } else {
         warner "Pacstall is not installed or not executable!";
