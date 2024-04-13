@@ -10,6 +10,7 @@ pkgs.mkShellNoCC {
     perl
   ] ++ (with pkgs.perl538Packages; [
     DataCompare
+    DevelTrace
     Filechdir
     IPCSystemSimple
     JSON
