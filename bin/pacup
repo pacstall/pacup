@@ -128,7 +128,7 @@ sub main ($infile) {
     }
 
     my $newestver;
-    my $ua = LWP::UserAgent->new( show_progress => 0 );
+    my $ua = LWP::UserAgent->new( show_progress => 1 );
     if ($opt_custom_version) {
         $newestver = $opt_custom_version;
     } else {
