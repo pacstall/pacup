@@ -74,13 +74,11 @@ sub repology_get_newestver ( $response, $filters, $oldver, $action ) {
     }
 
     my $newver = reduce {
-        my $result = system [ 0, 1 ], 'dpkg',
-            ( '--compare-versions', $a, 'gt', $b );
+        my $result = system("dpkg --compare-versions $a gt $b");
         if ( $result == 0 ) {
             $a;
         } else {
-            $result = system [ 0, 1 ], 'dpkg',
-                ( '--compare-versions', $a, 'lt', $b );
+            $result = system("dpkg --compare-versions $a lt $b");
             if ( $result == 0 ) {
                 $b;
             } else {
