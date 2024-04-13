@@ -16,6 +16,7 @@ pkgs.mkShellNoCC {
     JSON
     ListMoreUtils
     TestLWPUserAgent
+    LWPProtocolHttps
   ]);
 
   LC_ALL = "C";
