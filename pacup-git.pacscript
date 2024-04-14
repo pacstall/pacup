@@ -1,5 +1,5 @@
 name="pacup-git"
-gives="pacup"
+gives="pacup.pl"
 pkgver="3.0.0"
 pkgdesc="Next-gen rewrite of Pacup"
 depends=(
@@ -15,7 +15,7 @@ replace=(
   "${gives}-bin"
   "${gives}-git"
 )
-url="https://github.com/pacstall/${gives}.pl.git"
+url="https://github.com/pacstall/${gives}.git"
 maintainer="vigress8 <vig@disroot.org>"
 
 build() {
