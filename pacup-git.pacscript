@@ -1,6 +1,6 @@
-pkgname="pacup.pl-git"
-gives="pacup.pl"
-pkgver="20240412"
+name="pacup-git"
+gives="pacup"
+pkgver="3.0.0"
 pkgdesc="Next-gen rewrite of Pacup"
 depends=(
   'libdata-compare-perl'
@@ -10,15 +10,19 @@ depends=(
   'libwww-perl'
   'liblist-moreutils-perl'
 )
-source=("https://github.com/vigress8/pacup.pl.git")
-maintainer=("vigress8 <vig@disroot.org>")
+replace=(
+  "${gives}"
+  "${gives}-bin"
+  "${gives}-git"
+)
+url="https://github.com/pacstall/${gives}.pl.git"
+maintainer="vigress8 <vig@disroot.org>"
 
 build() {
-  cd "${gives}"
   perl Makefile.PL
   make -j"${NCPU}"
 }
 
 package() {
-  make -C "${gives}" install DESTDIR="${pkgdir}"
+  sudo make install DESTDIR="${pkgdir}"
 }

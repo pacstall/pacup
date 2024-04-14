@@ -1,0 +1,29 @@
+pkgname="pacup-bin"
+gives="pacup"
+pkgver="3.0.0"
+pkgdesc="Next-gen rewrite of Pacup"
+depends=(
+  'libdata-compare-perl'
+  'libfile-chdir-perl'
+  'libipc-system-simple-perl'
+  'libjson-perl'
+  'libwww-perl'
+  'liblist-moreutils-perl'
+)
+replaces=(
+  "${gives}"
+  "${gives}-bin"
+  "${gives}-git"
+)
+source=("https://github.com/pacstall/${gives}/archive/refs/tags/${pkgver}.zip")
+maintainer=("vigress8 <vig@disroot.org>")
+
+build() {
+  cd "${gives}-${pkgver}"
+  perl Makefile.PL
+  make -j"${NCPU}"
+}
+
+package() {
+  make -C "${gives}" install DESTDIR="${pkgdir}"
+}

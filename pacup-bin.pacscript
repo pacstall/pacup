@@ -1,6 +1,6 @@
-name="pacup.pl-git"
-gives="pacup.pl"
-pkgver="20240412"
+name="pacup-bin"
+gives="pacup"
+pkgver="3.0.0"
 pkgdesc="Next-gen rewrite of Pacup"
 depends=(
   'libdata-compare-perl'
@@ -10,7 +10,12 @@ depends=(
   'libwww-perl'
   'liblist-moreutils-perl'
 )
-url="https://github.com/vigress8/pacup.pl.git"
+replace=(
+  "${gives}"
+  "${gives}-bin"
+  "${gives}-git"
+)
+url="https://github.com/pacstall/${gives}/archive/refs/tags/${pkgver}.zip"
 maintainer="vigress8 <vig@disroot.org>"
 
 build() {
