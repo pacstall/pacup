@@ -7,7 +7,7 @@ no warnings qw(experimental::signatures);
 use Term::ANSIColor 'colored';
 
 use base 'Exporter';
-our @EXPORT = qw(ask ask_yes error info subtext throw warner);
+our @EXPORT = qw(ask ask_yes ask_wait error info subtext throw warner);
 
 sub info ($text) {
     say '[', colored( '+', 'bold green' ), '] ',
@@ -30,8 +30,7 @@ sub throw ($text) {
 }
 
 sub subtext ($text) {
-    say colored( '    [', 'bold' ), colored( '>', 'bold blue' ),
-        colored( '] ', 'bold' ), $text;
+    say '    [', colored( '>', 'bold blue' ), '] ', $text;
 }
 
 sub ask ($text) {
@@ -48,6 +47,20 @@ sub ask_yes ($text) {
         colored( '] ', 'bold' );
     chomp( my $answer = <STDIN> );
     return !( $answer =~ /no?/i );
+}
+
+sub ask_wait ($text) {
+    while (1) {
+        print $text, colored(' [', 'bold'),
+              colored('y', 'bold green'), colored('/', 'bold'),
+              colored('n', 'bold red'), colored('] ', 'bold');
+        chomp( my $answer = <STDIN> );
+        if ($answer =~ /ye?s?/i) {
+            return 1;
+        } elsif ($answer =~ /no?/i) {
+            return 0;
+        }
+    }
 }
 
 1;

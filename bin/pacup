@@ -225,12 +225,12 @@ sub main ($infile) {
         $ENV{'PACSTALL_PAYLOAD'} = $payload;
         system 'pacstall', ( '--install', $infile );
         delete $ENV{'PACSTALL_PAYLOAD'};
-        return unless ask "does $pkgname work?";
     } else {
         warner "Pacstall is not installed or not executable!";
     }
 
     return 1 unless $opt_ship;
+    return unless ask_wait "does $pkgname work?";
 
     my $commit_msg = qq/upd($pkgname): \\\`$pkgver\\\` -> \\\`$newestver\\\`/;
 
