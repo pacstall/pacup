@@ -19,6 +19,7 @@ use File::Temp 'tempdir';
 use Getopt::Long;
 use IPC::System::Simple qw(capture system $EXITVAL);
 use LWP::UserAgent;
+use Term::ProgressBar;
 use Pod::Usage;
 use Term::ANSIColor;
 
@@ -65,12 +66,33 @@ sub check_deps {
 }
 
 sub fetch_source_entry ( $ua, $url, $outfile ) {
-    my $response = $ua->get($url);
-    throw "Could not fetch $url" unless $response->is_success;
-
-    open my $fh, '>', $outfile or throw "Could not open $outfile: $!";
-    print $fh $response->decoded_content
-        or throw "Could not write to $outfile: $!";
+    $ua->max_redirect(0);
+    $ua->show_progress(0);
+    my $response = $ua->head($url);
+    while ($response->is_redirect) {
+        my $location = $response->header('Location');
+        $response = $ua->head($location);
+    }
+    open my $fh, '>', $outfile or die "Could not open $outfile: $!";
+    if ($response->is_success) {
+        my $final_url = $response->request->uri;
+        my $file_size = $ua->head($final_url)->header('Content-Length');
+        my $progress = Term::ProgressBar->new({
+            count => $file_size,
+            ETA => 'linear',
+            remove => 0
+        });
+        $progress->minor(0);
+        my $received = 0;
+        $response = $ua->get($final_url, ':content_cb' => sub ( $chunk, $res, $proto ) {
+            $received += length($chunk);
+            $progress->update($received);
+            print $fh $chunk;
+        });
+    } else {
+        close $fh or throw "Could not close $outfile: $!";
+        throw $response->status_line;
+    }
     close $fh or throw "Could not close $outfile: $!";
 }
 
