@@ -1,7 +1,7 @@
-name="pacup-bin"
-gives="pacup"
+name="pacup"
+gives="${name}.pl"
 pkgver="3.0.0"
-pkgdesc="Next-gen rewrite of Pacup"
+pkgdesc="Help maintainers update pacscripts (next-gen Perl rewrite)"
 depends=(
   'libdata-compare-perl'
   'libfile-chdir-perl'
@@ -9,11 +9,14 @@ depends=(
   'libjson-perl'
   'libwww-perl'
   'liblist-moreutils-perl'
+  'libterm-progressbar-perl'
 )
 replace=(
-  "${gives}"
-  "${gives}-bin"
-  "${gives}-git"
+  "${name}"
+  "${name}.pl"
+  "${name}.py"
+  "${name}-bin"
+  "${name}-git"
 )
 url="https://github.com/pacstall/${gives}/archive/refs/tags/${pkgver}.zip"
 maintainer="vigress8 <vig@disroot.org>"

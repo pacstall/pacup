@@ -1,7 +1,7 @@
-pkgname="pacup-bin"
-gives="pacup"
+pkgname="pacup"
+gives="${pkgname}.pl"
 pkgver="3.0.0"
-pkgdesc="Next-gen rewrite of Pacup"
+pkgdesc="Help maintainers update pacscripts (next-gen Perl rewrite)"
 depends=(
   'libdata-compare-perl'
   'libfile-chdir-perl'
@@ -9,11 +9,14 @@ depends=(
   'libjson-perl'
   'libwww-perl'
   'liblist-moreutils-perl'
+  'libterm-progressbar-perl'
 )
 replaces=(
-  "${gives}"
-  "${gives}-bin"
-  "${gives}-git"
+  "${pkgname}"
+  "${pkgname}.pl"
+  "${pkgname}.py"
+  "${pkgname}-bin"
+  "${pkgname}-git"
 )
 source=("https://github.com/pacstall/${gives}/archive/refs/tags/${pkgver}.zip")
 maintainer=("vigress8 <vig@disroot.org>")
@@ -25,5 +28,5 @@ build() {
 }
 
 package() {
-  make -C "${gives}" install DESTDIR="${pkgdir}"
+  make -C "${gives}-${pkgver}" install DESTDIR="${pkgdir}"
 }

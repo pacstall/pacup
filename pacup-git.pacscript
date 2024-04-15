@@ -1,7 +1,7 @@
 name="pacup-git"
 gives="pacup.pl"
 pkgver="3.0.0"
-pkgdesc="Next-gen rewrite of Pacup"
+pkgdesc="Help maintainers update pacscripts (next-gen Perl rewrite)"
 depends=(
   'libdata-compare-perl'
   'libfile-chdir-perl'
@@ -9,9 +9,12 @@ depends=(
   'libjson-perl'
   'libwww-perl'
   'liblist-moreutils-perl'
+  'libterm-progressbar-perl'
 )
 replace=(
   "${gives}"
+  "${gives}.pl"
+  "${gives}.py"
   "${gives}-bin"
   "${gives}-git"
 )
