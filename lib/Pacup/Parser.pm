@@ -10,7 +10,7 @@ use base 'Exporter';
 our @EXPORT
     = qw(check_hashes getarr get_sourcearr get_sourced get_sumarr geturl getvar @HASHTYPES);
 
-my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
+our @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 
 sub getvar ( $name, $lines ) {
     my @lines = @$lines;

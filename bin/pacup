@@ -33,7 +33,6 @@ my $opt_ship = 0;
 my $opt_origin_remote = 'origin';
 my $opt_custom_version;
 my $opt_push_force = 0;
-my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 
 our @collected_files;
 
