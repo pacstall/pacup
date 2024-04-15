@@ -25,7 +25,7 @@ Originally written in Python, now in Perl.
 To install the latest release run:
 
 ```bash
-$ pacstall -I pacup-bin # unreleased
+$ pacstall -I pacup # unreleased
 ```
 
 To install the latest development build run:
