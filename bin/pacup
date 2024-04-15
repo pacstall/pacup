@@ -19,9 +19,9 @@ use File::Temp 'tempdir';
 use Getopt::Long;
 use IPC::System::Simple qw(capture system $EXITVAL);
 use LWP::UserAgent;
-use Term::ProgressBar;
 use Pod::Usage;
 use Term::ANSIColor;
+use Term::ProgressBar;
 
 my $TMPDIR = $ENV{'TMPDIR'} || '/tmp';
 my $PACUP_DIR = tempdir 'pacup.XXXXXX', DIR => $TMPDIR;
