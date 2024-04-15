@@ -53,7 +53,7 @@ $ nix-shell
 ## Usage
 
 ```bash
-USAGE: pacup [OPTIONS] PACSCRIPTS...
+USAGE: pacup [OPTIONS] PACSCRIPT...
 
 OPTIONS:
     -v, --version
