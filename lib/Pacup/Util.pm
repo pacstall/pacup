@@ -51,13 +51,13 @@ sub ask_yes ($text) {
 
 sub ask_wait ($text) {
     while (1) {
-        print $text, colored(' [', 'bold'),
-              colored('y', 'bold green'), colored('/', 'bold'),
-              colored('n', 'bold red'), colored('] ', 'bold');
+        print $text, colored( ' [', 'bold' ),
+            colored( 'y', 'bold green' ), colored( '/', 'bold' ),
+            colored( 'n', 'bold red' ), colored( '] ', 'bold' );
         chomp( my $answer = <STDIN> );
-        if ($answer =~ /ye?s?/i) {
+        if ( $answer =~ /ye?s?/i ) {
             return 1;
-        } elsif ($answer =~ /no?/i) {
+        } elsif ( $answer =~ /no?/i ) {
             return 0;
         }
     }

@@ -68,27 +68,31 @@ sub fetch_source_entry ( $ua, $url, $outfile ) {
     $ua->max_redirect(0);
     $ua->show_progress(0);
     my $response = $ua->head($url);
-    while ($response->is_redirect) {
+    while ( $response->is_redirect ) {
         my $location = $response->header('Location');
         $response = $ua->head($location);
     }
     open my $fh, '>', $outfile or throw "Could not open $outfile: $!";
-    if ($response->is_success) {
+    if ( $response->is_success ) {
         my $final_url = $response->request->uri;
         my $file_size = $ua->head($final_url)->header('Content-Length');
-        my $progress = Term::ProgressBar->new({
-            count => $file_size,
-            ETA => 'linear',
-            remove => 0
-        });
+        my $progress = Term::ProgressBar->new(
+            {   count => $file_size,
+                ETA => 'linear',
+                remove => 0
+            }
+        );
         $progress->minor(0);
         my $received = 0;
-        $response = $ua->get($final_url, ':content_cb' => sub ( $chunk, $res, $proto ) {
-            $received += length($chunk);
-            $progress->update($received);
-            print $fh $chunk
-                or throw "Could not write to $outfile: $!";
-        });
+        $response = $ua->get(
+            $final_url,
+            ':content_cb' => sub ( $chunk, $res, $proto ) {
+                $received += length($chunk);
+                $progress->update($received);
+                print $fh $chunk
+                    or throw "Could not write to $outfile: $!";
+            }
+        );
     } else {
         close $fh or throw "Could not close $outfile: $!";
         throw $response->status_line;
@@ -243,7 +247,7 @@ sub main ($infile) {
 
     if ( -x '/usr/bin/pacstall' ) {
         info "Installing from $pacscript";
-        my $payload = join(';:', @collected_files);
+        my $payload = join( ';:', @collected_files );
         $ENV{'PACSTALL_PAYLOAD'} = $payload;
         system 'pacstall', ( '--install', $infile );
         delete $ENV{'PACSTALL_PAYLOAD'};
