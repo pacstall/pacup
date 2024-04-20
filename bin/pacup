@@ -11,6 +11,7 @@ use Pacup::Repology;
 use Pacup::Util;
 
 use Data::Dumper;
+use Dpkg::Version qw(version_compare_relation REL_GE);
 use File::Basename 'basename';
 use File::chdir;
 use File::Path qw(make_path rmtree);
@@ -183,10 +184,11 @@ sub main ($infile) {
         . colored( " ~> ", 'blue' )
         . colored( "Latest: ", 'bold' )
         . colored( $newestver, 'green' );
-    system [ 0, 1 ], 'dpkg',
-        ( '--compare-versions', $pkgver, 'ge', $newestver );
-    info( colored( $pkgname, 'cyan' ) . " is up to date" ) and return 1
-        if $EXITVAL == 0;
+
+    if ( version_compare_relation $pkgver, REL_GE, $newestver ) {
+        info( colored( $pkgname, 'cyan' ) . " is up to date" );
+        return 1;
+    }
     return 1 if $opt_show_repology;
 
     return 1

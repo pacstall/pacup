@@ -6,6 +6,7 @@ use feature qw(signatures);
 
 use Pacup::Util;
 use Data::Compare;
+use Dpkg::Version qw(version_compare_relation REL_GT REL_LT);
 use IPC::System::Simple qw(system);
 use List::Util 'reduce';
 use List::MoreUtils 'all';
@@ -52,7 +53,7 @@ sub repology_get_newestver ( $response, $filters, $oldver, $action ) {
     my %version_count;
 
     foreach my $entry (@$decoded) {
-        next if grep /^$entry->{'repo'}$/, @BANNED_REPOS;
+        next if grep /^\Q$entry->{'repo'}\E$/, @BANNED_REPOS;
         my $is_match
             = all { exists $entry->{$_} && $entry->{$_} eq $filters->{$_} }
             keys %$filters;
@@ -74,16 +75,12 @@ sub repology_get_newestver ( $response, $filters, $oldver, $action ) {
     }
 
     my $newver = reduce {
-        my $result = system 'dpkg', ( '--compare-versions', $a, 'gt', $b );
-        if ( $result == 0 ) {
+        if ( version_compare_relation $a, REL_GT, $b ) {
             $a;
+        } elsif ( version_compare_relation $a, REL_LT, $b ) {
+            $b;
         } else {
-            $result = system 'dpkg', ( '--compare-versions', $a, 'lt', $b );
-            if ( $result == 0 ) {
-                $b;
-            } else {
-                $version_count{$a} >= $version_count{$b} ? $a : $b;
-            }
+            $version_count{$a} >= $version_count{$b} ? $a : $b;
         }
     } keys %version_count;
 
