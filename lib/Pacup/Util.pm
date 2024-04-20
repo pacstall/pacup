@@ -1,9 +1,8 @@
 package Pacup::Util;
 
 use strict;
-use warnings;
+use warnings qw(all -experimental::signatures);
 use feature qw(say signatures);
-no warnings qw(experimental::signatures);
 use Term::ANSIColor 'colored';
 
 use base 'Exporter';

@@ -1,11 +1,10 @@
 #!/usr/bin/env perl
 package main;
-our $VERSION = '3.0.0';
 
 use strict;
-use warnings;
+use warnings qw(all -experimental::signatures);
 use feature qw(say signatures);
-no warnings qw(experimental::signatures);
+our $VERSION = '3.0.0';
 
 use Pacup::Parser;
 use Pacup::Repology;
@@ -23,9 +22,6 @@ use Pod::Usage;
 use Term::ANSIColor;
 use Term::ProgressBar;
 
-my $TMPDIR = $ENV{'TMPDIR'} || '/tmp';
-my $PACUP_DIR = tempdir 'pacup.XXXXXX', DIR => $TMPDIR;
-
 my $opt_help = 0;
 my $opt_version = 0;
 my $opt_show_repology = 0;
@@ -36,10 +32,13 @@ my $opt_push_force = 0;
 
 our @collected_files;
 
+my $PACUP_DIR;
+
 END {
-    info 'Cleaning up'
-        unless ( $opt_help || $opt_version || $opt_show_repology || !@ARGV );
-    rmtree $PACUP_DIR;
+    if ( $PACUP_DIR && -d $PACUP_DIR ) {
+        info 'Cleaning up';
+        rmtree $PACUP_DIR;
+    }
 }
 
 sub version_info {
@@ -163,7 +162,7 @@ sub main ($infile) {
     } else {
         my @repology = getarr 'repology', \@lines;
         throw 'Could not find repology' unless @repology;
-        @repology = map { $_ = get_sourced $_, $infile } @repology;
+        @repology = map { get_sourced $_, $infile } @repology;
         subtext 'Found repology info: '
             . colored(
             join( ', ', map { join( ':', split( ': ', $_, 2 ) ) } @repology ),
@@ -234,6 +233,7 @@ sub main ($infile) {
     throw 'Could not find sources' unless @allSources;
 
     info "Fetching sources for " . colored( $pkgname, 'bold blue' );
+    $PACUP_DIR = tempdir 'pacup.XXXXXX', DIR => ( $ENV{'TMPDIR'} || '/tmp' );
     my $pkgdir = tempdir "$pkgname.XXXXXX", DIR => $PACUP_DIR;
     @lines = fetch_sources $ua, $pkgdir, \@allSources, \@lines;
 
@@ -248,9 +248,8 @@ sub main ($infile) {
     if ( -x '/usr/bin/pacstall' ) {
         info "Installing from $pacscript";
         my $payload = join( ';:', @collected_files );
-        $ENV{'PACSTALL_PAYLOAD'} = $payload;
+        local $ENV{'PACSTALL_PAYLOAD'} = $payload;
         system 'pacstall', ( '--install', $infile );
-        delete $ENV{'PACSTALL_PAYLOAD'};
     } else {
         warner "Pacstall is not installed or not executable!";
     }
