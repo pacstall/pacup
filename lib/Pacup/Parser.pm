@@ -1,9 +1,8 @@
 package Pacup::Parser;
 
 use strict;
-use warnings;
+use warnings qw(all -experimental::signatures);
 use feature qw(signatures);
-no warnings qw(experimental::signatures);
 
 use IPC::System::Simple qw(capture);
 use base 'Exporter';
