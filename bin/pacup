@@ -149,7 +149,7 @@ sub main ($infile) {
     subtext "Found pkgver: " . colored( $pkgver, 'bright_yellow' );
 
     my @maintainer = getarr 'maintainer', \@lines;
-    if (@maintainer) {
+    if ( validarr \@maintainer ) {
         subtext 'Found maintainer: '
             . colored( join( ', ', @maintainer ), 'bright_magenta' );
     } else {
@@ -162,7 +162,7 @@ sub main ($infile) {
         $newestver = $opt_custom_version;
     } else {
         my @repology = getarr 'repology', \@lines;
-        throw 'Could not find repology' unless @repology;
+        throw 'Could not find repology' unless validarr \@repology;
         @repology = map { get_sourced $_, $infile } @repology;
         subtext 'Found repology info: '
             . colored(
@@ -205,7 +205,7 @@ sub main ($infile) {
     }
 
     my @arches = getarr 'arch', \@lines;
-    @arches = qw(amd64) unless @arches;
+    @arches = qw(amd64) unless validarr \@arches;
 
     my @allSources;
     for my $arch (@arches) {
@@ -232,7 +232,7 @@ sub main ($infile) {
 
         push @allSources, @sourceList;
     }
-    throw 'Could not find sources' unless @allSources;
+    throw 'Could not find sources' unless validarr \@allSources;
 
     info "Fetching sources for " . colored( $pkgname, 'bold blue' );
     $PACUP_DIR = tempdir 'pacup.XXXXXX', DIR => ( $ENV{'TMPDIR'} || '/tmp' );

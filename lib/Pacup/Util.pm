@@ -3,10 +3,12 @@ package Pacup::Util;
 use strict;
 use warnings qw(all -experimental::signatures);
 use feature qw(say signatures);
-use Term::ANSIColor 'colored';
-
 use base 'Exporter';
-our @EXPORT = qw(ask ask_yes ask_wait error info subtext throw warner);
+our @EXPORT
+    = qw(ask ask_yes ask_wait error info subtext throw validarr warner);
+
+use List::Util qw(all);
+use Term::ANSIColor qw(colored);
 
 sub info ($text) {
     say '[', colored( '+', 'bold green' ), '] ',
@@ -60,6 +62,10 @@ sub ask_wait ($text) {
             return 0;
         }
     }
+}
+
+sub validarr ($ref) {
+    @$ref && all {$_} @$ref;
 }
 
 1;

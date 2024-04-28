@@ -3,11 +3,12 @@ package Pacup::Parser;
 use strict;
 use warnings qw(all -experimental::signatures);
 use feature qw(signatures);
-
-use IPC::System::Simple qw(capture);
 use base 'Exporter';
 our @EXPORT
     = qw(check_hashes getarr get_sourcearr get_sourced get_sumarr geturl getvar @HASHTYPES);
+
+use Pacup::Util qw(validarr);
+use IPC::System::Simple qw(capture);
 
 our @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 
@@ -31,7 +32,8 @@ OUTER: while ( my ( $i, $line ) = each @lines ) {
             last OUTER if /\)$/;
         }
     }
-    return @arr if @arr;
+
+    return @arr if validarr \@arr;
 }
 
 sub geturl ($entry) {
