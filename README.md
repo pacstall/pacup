@@ -2,8 +2,7 @@
 <h1 align="center">Pacup</h1>
 <p align="center">
   <a href="https://www.perl.org/"><img alt="Perl" src="https://img.shields.io/badge/language-perl_5-306998?logo=perl&logoColor=white&style=for-the-badge"></a>
-  <a href="https://github.com/psf/black"><img alt="Code style: black" src="https://img.shields.io/badge/code%20style-black-black?style=for-the-badge"/></a>
-  <a href="https://www.codacy.com/gh/pacstall/pacup/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=pacstall/pacup&amp;utm_campaign=Badge_Grade"><img alt="Codacy: grade" src="https://img.shields.io/codacy/grade/4b1365e6f7d2474283243f62b2c5973d?label=Codacy&logo=codacy&style=for-the-badge"></a>
+  <a href="https://github.com/psf/black"><img alt="Code style: perltidy" src="https://img.shields.io/badge/code%20style-perltidy-blue?style=for-the-badge"/></a>
 <p/>
 <p align="center">
   <!-- Social -->
