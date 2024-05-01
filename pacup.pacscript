@@ -1,5 +1,4 @@
 name="pacup"
-gives="${name}.pl"
 pkgver="3.0.0"
 pkgdesc="Help maintainers update pacscripts (next-gen Perl rewrite)"
 depends=(
@@ -18,7 +17,7 @@ replace=(
   "${name}-bin"
   "${name}-git"
 )
-url="https://github.com/pacstall/${gives}/archive/refs/tags/${pkgver}.zip"
+url="https://github.com/pacstall/${name}/archive/refs/tags/${pkgver}.zip"
 maintainer="vigress8 <vig@disroot.org>"
 
 build() {

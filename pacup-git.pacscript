@@ -1,5 +1,5 @@
 name="pacup-git"
-gives="pacup.pl"
+gives="pacup"
 pkgver="3.0.0"
 pkgdesc="Help maintainers update pacscripts (next-gen Perl rewrite)"
 depends=(

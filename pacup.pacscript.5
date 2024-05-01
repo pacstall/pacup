@@ -1,5 +1,4 @@
 pkgname="pacup"
-gives="${pkgname}.pl"
 pkgver="3.0.0"
 pkgdesc="Help maintainers update pacscripts (next-gen Perl rewrite)"
 depends=(
@@ -18,15 +17,18 @@ replaces=(
   "${pkgname}-bin"
   "${pkgname}-git"
 )
-source=("https://github.com/pacstall/${gives}/archive/refs/tags/${pkgver}.zip")
-maintainer=("vigress8 <vig@disroot.org>")
+source=("https://github.com/pacstall/${pkgname}/archive/refs/tags/${pkgver}.zip")
+maintainer=(
+  'vigress8 <vig@disroot.org>'
+  'Oren Klopfer <oren@taumoda.com>'
+)
 
 build() {
-  cd "${gives}-${pkgver}"
+  cd "${pkgname}-${pkgver}"
   perl Makefile.PL
   make -j"${NCPU}"
 }
 
 package() {
-  make -C "${gives}-${pkgver}" install DESTDIR="${pkgdir}"
+  make -C "${pkgname}-${pkgver}" install DESTDIR="${pkgdir}"
 }
