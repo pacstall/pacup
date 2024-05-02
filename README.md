@@ -24,13 +24,13 @@ Originally written in Python, now in Perl.
 To install the latest release run:
 
 ```bash
-$ pacstall -I pacup # unreleased
+$ pacstall -I pacup
 ```
 
 To install the latest development build run:
 
 ```bash
-$ pacstall -I pacup-git # unreleased
+$ pacstall -I pacup-git
 ```
 
 or
