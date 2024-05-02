@@ -1,4 +1,4 @@
-<p align="center"><img alt="logo" src="https://raw.githubusercontent.com/pacstall/pacup.py/master/imgs/logo.png"></p>
+<p align="center"><img alt="logo" src="https://raw.githubusercontent.com/pacstall/pacup/master/misc/logo.png"></p>
 <h1 align="center">Pacup</h1>
 <p align="center">
   <a href="https://www.perl.org/"><img alt="Perl" src="https://img.shields.io/badge/language-perl_5-306998?logo=perl&logoColor=white&style=for-the-badge"></a>
