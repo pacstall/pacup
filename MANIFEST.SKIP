@@ -1,9 +1,6 @@
 # Avoid Nix files
 \.nix$
 
-# Avoid pacscripts
-\.pacscript(?:\.5)?$
-
 # Avoid pre-commit
 ^\.pre-commit-config\.ya?ml
 
