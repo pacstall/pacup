@@ -1,0 +1,34 @@
+name: Bug report
+description: Create a report to help us improve
+labels: ["bug", "triage"]
+assignees:
+  - vigress8
+  - Elsie19
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      placeholder: Tell us what happened!
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: To reproduce
+      placeholder: 1. Just explain what happened and where you think the issue is.
+    validations:
+      required: true
+  - type: textarea
+    id: expectation
+    attributes:
+      label: Expected behavior
+    validations:
+          required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      placeholder: Attach or link to screenshots here.
+    validations:
+          required: true
