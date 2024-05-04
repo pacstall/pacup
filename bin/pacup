@@ -16,7 +16,7 @@ use File::Basename 'basename';
 use File::chdir;
 use File::Path qw(make_path rmtree);
 use File::Temp 'tempdir';
-use Getopt::Long;
+use Getopt::Long qw(:config no_auto_abbrev);
 use IPC::System::Simple qw(capture system $EXITVAL);
 use LWP::UserAgent;
 use Pod::Usage;
@@ -266,9 +266,11 @@ sub main ($infile) {
     my $current_branch = capture 'git',
         ( 'rev-parse', '--abbrev-ref', 'HEAD' );
     chomp $current_branch;
-    if (system( 'git',
-            ( 'show-ref', '--verify', '--quiet', "refs/heads/$ship_branch" ) )
-        == 0
+    if (system(
+            [ 0, 1 ],
+            'git',
+            ( 'show-ref', '--verify', '--quiet', "refs/heads/$ship_branch" )
+        ) == 0
         )
     {
         return unless ask_yes "Delete existing branch $ship_branch?";
@@ -278,7 +280,7 @@ sub main ($infile) {
             system 'git', ( 'branch', '--delete', '--force', $ship_branch );
         }
     }
-    system 'git', ( 'checkout', '--branch', $ship_branch );
+    system 'git', ( 'checkout', '-b', $ship_branch );
     system 'git', ( 'commit', '--message', $commit_msg );
     my @pushargs
         = ( 'push', '--set-upstream', $opt_origin_remote, $ship_branch );
@@ -297,13 +299,13 @@ sub main ($infile) {
 }
 
 GetOptions(
-    'help|?' => \$opt_help,
-    'version' => \$opt_version,
-    'ship' => \$opt_ship,
+    'help|h|?' => \$opt_help,
+    'version|v' => \$opt_version,
+    'ship|s' => \$opt_ship,
     'show-repology|r' => \$opt_show_repology,
-    'origin-remote=s' => \$opt_origin_remote,
+    'origin-remote|o=s' => \$opt_origin_remote,
     'custom-version|c=s' => \$opt_custom_version,
-    'push-force' => \$opt_push_force,
+    'push-force|p' => \$opt_push_force,
 ) or pod2usage(2);
 
 version_info() if $opt_version;
