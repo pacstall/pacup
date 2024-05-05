@@ -219,7 +219,7 @@ sub repology_get_newestver ( $response, $filters, $oldver, $action ) {
             print $json_text;
         }
         push @filtered, $entry;
-        if ( $entry->{'status'} ne 'newest' ) {
+        if ( $entry->{'status'} ne 'newest' && $version_count{ $entry->{'version'} }) {
             next
                 unless ( $filters->{'status'}
                 && $filters->{'status'} eq 'devel' )
