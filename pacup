@@ -258,7 +258,7 @@ sub fetch_source_entry ( $ua, $url, $outfile ) {
         my $location = $response->header('Location');
         $response = $ua->head($location);
     }
-    open my $fh, '>', $outfile or throw "Could not open $outfile: $!";
+    open my $fh, '>:raw', $outfile or throw "Could not open $outfile: $!";
     if ( $response->is_success ) {
         my $final_url = $response->request->uri;
         my $file_size = $ua->head($final_url)->header('Content-Length');
@@ -455,14 +455,14 @@ sub main ($pkg) {
         my $payload = join( ';:', @collected_files );
         local $ENV{'PACSTALL_PAYLOAD'} = $payload;
         system 'pacstall', ( '--install', $ppath );
+        return unless ask_wait "does $pkgname work?";
     } else {
         warner "Pacstall is not installed or not executable!";
     }
 
     return 1 unless $opt_ship;
-    return unless ask_wait "does $pkgname work?";
 
-    my $commit_msg = qq/upd($pkgname): \\\`$pkgver\\\` -> \\\`$newestver\\\`/;
+    my $commit_msg = qq/upd($pkgname): \`$pkgver\` -> \`$newestver\`/;
 
     system 'git', ( 'add', $ppath, $srcinfo );
     my $ship_branch = "ship-$pkgname";
