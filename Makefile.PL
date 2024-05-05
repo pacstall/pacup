@@ -8,7 +8,7 @@ WriteMakefile(
     VERSION_FROM => 'pacup',
     LICENSE => 'gpl_3',
     AUTHOR => 'Vigress <vig@disroot.org>',
-    EXE_FILES => ['pacup'],
+    EXE_FILES => ['pacup', 'scripts/srcinfo.sh'],
     INSTALLDIRS => 'vendor',
     dist => { COMPRESS => 'gzip', SUFFIX => 'gz' },
     PREREQ_PM => {
