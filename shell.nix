@@ -30,6 +30,6 @@ pkgs.mkShellNoCC {
 
   LC_ALL = "C";
   shellHook = ''
-    export PATH="$PWD:$PATH"
+    export PATH="$PWD:$PWD/scripts:$PATH"
   '';
 }

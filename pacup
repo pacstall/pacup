@@ -35,7 +35,7 @@ my $opt_custom_version;
 my $opt_push_force = 0;
 
 my ( undef, $here ) = fileparse abs_path $0;
-my $srcinfo_script = $here . "scripts/srcinfo.sh";
+my $srcinfo_script = "srcinfo.sh";
 my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 my $REPOLOGY_API_ROOT = 'https://repology.org/api/v1/project';
 
@@ -237,6 +237,10 @@ sub repology_get_newestver ( $response, $filters, $oldver, $action ) {
             $version_count{$a} >= $version_count{$b} ? $a : $b;
         }
     } keys %version_count;
+
+    unless ($newver) {
+        throw 'Could not find Repology entry that meets the requirements';
+    }
 
     foreach my $entry (@filtered) {
         if ( $entry->{'version'} eq $newver ) {

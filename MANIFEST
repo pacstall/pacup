@@ -4,3 +4,4 @@ MANIFEST			This list of files
 MANIFEST.SKIP
 pacup
 README.md
+scripts/srcinfo.sh

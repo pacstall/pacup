@@ -1,5 +1,6 @@
 # Avoid Nix files
 \.nix$
+\.envrc$
 
 # Avoid logo
 \.png$
