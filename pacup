@@ -1,0 +1,585 @@
+#!/usr/bin/env perl
+package main;
+
+use strict;
+use warnings qw(all -experimental::signatures);
+use feature qw(say signatures);
+our $VERSION = '3.1.0';
+
+#use Data::Dumper;
+use open ':std', ':encoding(UTF-8)';
+use Cwd qw(abs_path cwd);
+use Data::Compare;
+use Dpkg::Version;
+use File::Basename qw(basename fileparse);
+use File::chdir;
+use File::Copy qw(copy);
+use File::Path qw(make_path rmtree);
+use File::Temp qw(tempdir tempfile);
+use Getopt::Long qw(:config no_auto_abbrev);
+use IPC::System::Simple qw(capture system $EXITVAL);
+use JSON qw(decode_json);
+use List::MoreUtils qw(all);
+use List::Util qw(reduce);
+use LWP::UserAgent;
+use Pod::Usage;
+use Term::ANSIColor;
+use Term::ProgressBar;
+
+my $opt_help = 0;
+my $opt_version = 0;
+my $opt_show_repology = 0;
+my $opt_ship = 0;
+my $opt_origin_remote = 'origin';
+my $opt_custom_version;
+my $opt_push_force = 0;
+
+my ( undef, $here ) = fileparse abs_path $0;
+my $srcinfo_script = $here . "scripts/srcinfo.sh";
+my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
+my $REPOLOGY_API_ROOT = 'https://repology.org/api/v1/project';
+
+# List of repositories not to be used for version detection.
+# As can be inferred, we don't like Windows versions.
+my @BANNED_REPOS = qw(
+    appget
+    baulk
+    chocolatey
+    cygwin
+    just-install
+    scoop
+    winget
+);
+
+my $PACUP_DIR;
+my $origcwd = cwd();
+
+sub version_info {
+    say 'Pacup ', colored( 'v' . $VERSION, 'bold green' );
+    exit 0;
+}
+
+sub info ($text) {
+    say '[', colored( '+', 'bold green' ), '] ',
+        colored( 'INFO', 'bold' ), ': ', $text;
+}
+
+sub warner ($text) {
+    say STDERR '[', colored( '*', 'bold yellow' ), '] ',
+        colored( 'WARN', 'bold' ), ': ', $text;
+}
+
+sub error ($text) {
+    say STDERR '[', colored( '!', 'bold red' ), '] ',
+        colored( 'ERROR', 'bold' ), ': ', $text;
+}
+
+sub throw ($text) {
+    error $text;
+    exit 1;
+}
+
+sub subtext ($text) {
+    say '    [', colored( '>', 'bold blue' ), '] ', $text;
+}
+
+sub ask ($text) {
+    print $text, colored( ' [', 'bold' ), colored( 'y', 'green' ),
+        colored( '/', 'bold' ), colored( 'N', 'bold red' ),
+        colored( '] ', 'bold' );
+    chomp( my $answer = <STDIN> );
+    return $answer =~ /ye?s?/i;
+}
+
+sub ask_yes ($text) {
+    print $text, colored( ' [', 'bold' ), colored( 'Y', 'bold green' ),
+        colored( '/', 'bold' ), colored( 'n', 'red' ),
+        colored( '] ', 'bold' );
+    chomp( my $answer = <STDIN> );
+    return !( $answer =~ /no?/i );
+}
+
+sub ask_wait ($text) {
+    while (1) {
+        print $text, colored( ' [', 'bold' ),
+            colored( 'y', 'bold green' ), colored( '/', 'bold' ),
+            colored( 'n', 'bold red' ), colored( '] ', 'bold' );
+        chomp( my $answer = <STDIN> );
+        if ( $answer =~ /ye?s?/i ) {
+            return 1;
+        } elsif ( $answer =~ /no?/i ) {
+            return 0;
+        }
+    }
+}
+
+sub check_deps {
+    my @deps = qw(git sha256sum);
+    my $path = $ENV{'PATH'} || '/bin:/usr/bin';
+    my @pathdirs = split /:/, $path;
+    for my $dep (@deps) {
+        my $found = 0;
+        for my $dir (@pathdirs) {
+            my $try_path = $dir . '/' . $dep;
+            next unless -x $try_path;
+            $found = 1;
+            last;
+        }
+        throw 'Dependency ' . colored( $dep, 'bold' ) . ' not found'
+            unless $found;
+    }
+}
+
+sub cleanup {
+    chdir $origcwd;
+    if ( $PACUP_DIR && -d $PACUP_DIR ) {
+        info 'Cleaning up';
+        rmtree $PACUP_DIR;
+    }
+}
+
+END { cleanup() }
+local $SIG{INT} = sub {
+    warner "Interrupted by user";
+    cleanup();
+    exit 1;
+};
+local $SIG{TERM} = sub {
+    cleanup();
+    exit 1;
+};
+
+sub getvar ( $name, $lines ) {
+    for my $line (@$lines) {
+        my ( $key, $val ) = split / = /, $line;
+        return $val if $key eq $name;
+    }
+}
+
+sub getarr ( $name, $lines ) {
+    my @arr;
+    for my $line (@$lines) {
+        my ( $key, $val ) = split / = /, $line;
+        push @arr, $val if $key eq $name;
+    }
+    return @arr;
+}
+
+sub geturl ($entry) {
+    my $url;
+    if ( $entry =~ /::/ ) {
+        ( undef, $url ) = split /::/, $entry;
+    } else {
+        $url = $entry;
+    }
+    return $url;
+}
+
+sub check_hashes {
+    for my $hashtype (@HASHTYPES) {
+        my $hash = $_->{$hashtype};
+        defined $hash or next;
+        return 0 if $hash eq 'SKIP';
+    }
+    return 1;
+}
+
+sub parse_repology ($arr) {
+    return map { split ': ', $_, 2 } @$arr;
+}
+
+sub query_repology ( $ua, $filters ) {
+    my $project = $filters->{'project'};
+    delete $filters->{'project'};
+    $ua->agent(
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+    );
+
+    my $response = $ua->get("$REPOLOGY_API_ROOT/$project");
+    throw 'Could not fetch repology' unless $response->is_success;
+
+    return $response->decoded_content;
+}
+
+sub repology_get_newestver ( $response, $filters, $oldver, $action ) {
+    my $decoded = decode_json($response);
+    my @filtered;
+    my %version_count;
+
+    foreach my $entry (@$decoded) {
+        next if grep /^\Q$entry->{'repo'}\E$/, @BANNED_REPOS;
+        my $is_match
+            = all { exists $entry->{$_} && $entry->{$_} eq $filters->{$_} }
+            keys %$filters;
+        next unless $is_match;
+        next if ( $entry->{'version'} eq 'HEAD' );
+        if ( $action eq 'display' ) {
+            my $json_text = JSON->new->pretty->encode($entry);
+            $json_text =~ s/^/\t/mg;
+            print $json_text;
+        }
+        push @filtered, $entry;
+        if ( $entry->{'status'} ne 'newest' ) {
+            next
+                unless ( $filters->{'status'}
+                && $filters->{'status'} eq 'devel' )
+                || exists $filters->{'repo'};
+        }
+        $version_count{ $entry->{'version'} }++;
+    }
+
+    my $newver = reduce {
+        if ( version_compare_relation $a, REL_GT, $b ) {
+            $a;
+        } elsif ( version_compare_relation $a, REL_LT, $b ) {
+            $b;
+        } else {
+            $version_count{$a} >= $version_count{$b} ? $a : $b;
+        }
+    } keys %version_count;
+
+    foreach my $entry (@filtered) {
+        if ( $entry->{'version'} eq $newver ) {
+            return $newver;
+        }
+    }
+    throw 'Could not find Repology entry that meets the requirements';
+}
+
+sub fetch_source_entry ( $ua, $url, $outfile ) {
+    $ua->max_redirect(0);
+    $ua->show_progress(0);
+    my $response = $ua->head($url);
+    while ( $response->is_redirect ) {
+        my $location = $response->header('Location');
+        $response = $ua->head($location);
+    }
+    open my $fh, '>', $outfile or throw "Could not open $outfile: $!";
+    if ( $response->is_success ) {
+        my $final_url = $response->request->uri;
+        my $file_size = $ua->head($final_url)->header('Content-Length');
+        my $progress = Term::ProgressBar->new(
+            {   count => $file_size,
+                ETA => 'linear',
+                remove => 0
+            }
+        );
+        $progress->minor(0);
+        my $received = 0;
+        $response = $ua->get(
+            $final_url,
+            ':content_cb' => sub ( $chunk, $res, $proto ) {
+                $received += length($chunk);
+                $progress->update($received);
+                print $fh $chunk
+                    or throw "Could not write to $outfile: $!";
+            }
+        );
+    } else {
+        close $fh or throw "Could not close $outfile: $!";
+        throw $response->status_line;
+    }
+    close $fh or throw "Could not close $outfile: $!";
+}
+
+sub calculate_hash ( $file, $hashtype ) {
+    my $output = capture [ 0, 1 ], $hashtype . 'sum', ($file);
+    throw "Could not calculate ${hashtype}sum of $file" unless $EXITVAL == 0;
+    my ($hash) = split ' ', $output;
+    return $hash;
+}
+
+sub fetch_sources ( $ua, $pkgdir, $sources, $plines ) {
+    my @collected_files;
+    local $CWD = $pkgdir;
+    for my $entry (@$sources) {
+        my $url = $entry->{'url'};
+        my $file = basename $url;
+        info "Downloading " . colored( $file, 'bold magenta' );
+        fetch_source_entry $ua, $url, $file;
+        push @collected_files, "$pkgdir/$file";
+        for my $hashtype (@HASHTYPES) {
+            my $oldhash = $entry->{$hashtype} || next;
+            subtext "Calculating ${hashtype}sum for source entry";
+            my $newhash = calculate_hash $file, $hashtype;
+            s/$oldhash/$newhash/ for @$plines;
+        }
+    }
+    return @collected_files;
+}
+
+sub build_sourcelist ( $lines, $arch = '' ) {
+    my $source_var = $arch ? "source_$arch" : 'source';
+    my @sourceList;
+    my @source = getarr $source_var, $lines;
+    while ( my ( $i, $entry ) = each @source ) {
+        my %edict;
+        $edict{'url'} = geturl $entry;
+        for my $hashtype (@HASHTYPES) {
+            my $hashtype_var
+                = $arch ? "${hashtype}sums_$arch" : "${hashtype}sums";
+            my @sums = getarr $hashtype_var, $lines;
+            $edict{$hashtype} = $sums[$i];
+        }
+        push @sourceList, \%edict;
+    }
+
+    for my $entry (@sourceList) {
+        subtext 'Found source ' . colored( $entry->{'url'}, 'underline' );
+    }
+
+    grep { check_hashes $_ } @sourceList;
+}
+
+sub readlines ( $ref, $infile ) {
+    open my $fh, '<', $infile or throw "Could not open $infile: $!";
+    chomp( @$ref = <$fh> );
+    close $fh or throw "Could not close $infile: $!";
+}
+
+sub writelines ( $ref, $infile ) {
+    open my $fh, '>', $infile or throw "Could not open $infile: $!";
+    print $fh ( join "\n", @$ref ) . "\n"
+        or throw "Could not write to $infile: $!";
+    close $fh or throw "Could not close $infile: $!";
+}
+
+sub main ($pkg) {
+    my $ppath = -f $pkg ? $pkg : "packages/$pkg/$pkg.pacscript";
+    my ( $pacscript, $dir ) = fileparse $ppath;
+    my $srcinfo = $dir . ".SRCINFO";
+
+    -f $ppath or throw "Not a file: " . colored( $ppath, 'bold' );
+    -w $ppath
+        or throw "File is not writable: " . colored( $ppath, 'bold' );
+
+    unless ( -f $srcinfo ) {
+        info "Generating .SRCINFO for " . colored( $pacscript, 'underline' );
+        system "srcinfo.sh", ($ppath);
+    }
+
+    my @lines;
+    readlines( \@lines, $srcinfo );
+    info "Parsing .SRCINFO for " . colored( $pacscript, 'underline' );
+
+    my $pkgname = getvar 'pkgname', \@lines;
+    throw 'Could not find pkgname' unless $pkgname;
+    subtext "Found pkgname: " . colored( $pkgname, 'cyan' );
+
+    my $pkgver = getvar 'pkgver', \@lines;
+    throw 'Could not find pkgver' unless $pkgver;
+    subtext "Found pkgver: " . colored( $pkgver, 'bright_yellow' );
+
+    my @maintainer = getarr 'maintainer', \@lines;
+    if ( @maintainer + 0 > 0 ) {
+        subtext 'Found maintainer: '
+            . colored( join( ', ', @maintainer ), 'bright_magenta' );
+    } else {
+        warner 'Could not find maintainer';
+    }
+
+    my $newestver;
+    my $ua = LWP::UserAgent->new( show_progress => 1 );
+    if ($opt_custom_version) {
+        $newestver = $opt_custom_version;
+    } else {
+        my @repology = getarr 'repology', \@lines;
+        throw 'Could not find repology' unless @repology + 0 > 0;
+        subtext 'Found repology info: '
+            . colored( join( ', ', @repology ), 'bright_green' );
+
+        my %repology_filters = parse_repology \@repology;
+
+        info 'Querying Repology';
+        my $response = query_repology $ua, \%repology_filters;
+        my $action = $opt_show_repology ? 'display' : 'newestver';
+        $newestver
+            = repology_get_newestver( $response, \%repology_filters, $pkgver,
+            $action );
+    }
+    subtext colored( "Current: ", 'bold' )
+        . colored( $pkgver, 'yellow' )
+        . colored( " ~> ", 'blue' )
+        . colored( "Latest: ", 'bold' )
+        . colored( $newestver, 'green' );
+
+    if ( version_compare_relation $pkgver, REL_GE, $newestver ) {
+        info( colored( $pkgname, 'cyan' ) . " is up to date" );
+        return 1;
+    }
+    return 1 if $opt_show_repology;
+
+    return 1
+        unless ask_yes "Proceed with updating "
+        . colored( $pkgname, 'magenta' ) . " to "
+        . colored( $newestver, 'green' ) . "?";
+
+    my @plines;
+    readlines( \@plines, $ppath );
+
+    s/\Q$pkgver\E/$newestver/g for @plines;
+    $PACUP_DIR = tempdir 'pacup.XXXXXX', DIR => ( $ENV{'TMPDIR'} || '/tmp' );
+    my $pkgdir = tempdir "$pkgname.XXXXXX", DIR => $PACUP_DIR;
+    my ( undef, $ppath_tmp ) = tempfile "$pacscript.XXXXXX", DIR => $pkgdir;
+    writelines( \@plines, $ppath_tmp );
+
+    system $srcinfo_script, ($ppath_tmp);
+    my $srcinfo_tmp = $pkgdir . '/.SRCINFO';
+    readlines( \@lines, $srcinfo_tmp );
+
+    my @arches = getarr 'arch', \@lines;
+    my @allSources;
+    push @allSources, build_sourcelist \@lines;
+    for my $arch (@arches) {
+        push @allSources, build_sourcelist \@lines, $arch;
+    }
+    throw 'Could not find sources' unless @allSources + 0 > 0;
+
+    info "Fetching sources for " . colored( $pkgname, 'bold blue' );
+    my @collected_files = fetch_sources $ua, $pkgdir, \@allSources, \@plines;
+    writelines( \@plines, $ppath_tmp );
+
+    info "updating " . colored( $pacscript, 'bold yellow' );
+    copy $ppath_tmp, $ppath
+        or throw "Could not copy $ppath_tmp to $ppath: $!";
+    system $srcinfo_script, ($ppath_tmp);
+    copy $srcinfo_tmp, $srcinfo
+        or throw "Could not copy $srcinfo_tmp to $srcinfo: $!";
+
+    if ( -x '/usr/bin/pacstall' ) {
+        info "Installing from $pacscript";
+        my $payload = join( ';:', @collected_files );
+        local $ENV{'PACSTALL_PAYLOAD'} = $payload;
+        system 'pacstall', ( '--install', $ppath );
+    } else {
+        warner "Pacstall is not installed or not executable!";
+    }
+
+    return 1 unless $opt_ship;
+    return unless ask_wait "does $pkgname work?";
+
+    my $commit_msg = qq/upd($pkgname): \\\`$pkgver\\\` -> \\\`$newestver\\\`/;
+
+    system 'git', ( 'add', $ppath, $srcinfo );
+    my $ship_branch = "ship-$pkgname";
+    my $current_branch = capture 'git',
+        ( 'rev-parse', '--abbrev-ref', 'HEAD' );
+    chomp $current_branch;
+    if (system(
+            [ 0, 1 ],
+            'git',
+            ( 'show-ref', '--verify', '--quiet', "refs/heads/$ship_branch" )
+        ) == 0
+        )
+    {
+        return unless ask_yes "Delete existing branch $ship_branch?";
+        if ( $current_branch eq $ship_branch ) {
+            throw "Currently on $ship_branch";
+        } else {
+            system 'git', ( 'branch', '--delete', '--force', $ship_branch );
+        }
+    }
+    system 'git', ( 'checkout', '-b', $ship_branch );
+    system 'git', ( 'commit', '--message', $commit_msg );
+    my @pushargs
+        = ( 'push', '--set-upstream', $opt_origin_remote, $ship_branch );
+    push @pushargs, '--force-with-lease' if $opt_push_force;
+    system 'git', @pushargs;
+
+    if ( ask
+        'Create PR? (must have gh installed and authenticated to GitHub)' )
+    {
+        system 'gh',
+            ( 'pr', 'create', '--title', $commit_msg, '--body', '""' );
+    }
+
+    info "Done!";
+    return 1;
+}
+
+unless (caller) {
+    GetOptions(
+        'help|h|?' => \$opt_help,
+        'version|v' => \$opt_version,
+        'ship|s' => \$opt_ship,
+        'show-repology|r' => \$opt_show_repology,
+        'origin-remote|o=s' => \$opt_origin_remote,
+        'custom-version|c=s' => \$opt_custom_version,
+        'push-force|p' => \$opt_push_force,
+    ) or pod2usage(2);
+
+    version_info() if $opt_version;
+    pod2usage(0) if $opt_help;
+    pod2usage(1) if !@ARGV;
+
+    check_deps();
+    for my $pkg (@ARGV) {
+        main $pkg;
+    }
+}
+
+__END__
+
+=head1 NAME
+
+pacup - Pacscript Updater
+
+=head1 SYNOPSIS
+
+pacup [options] [pkgnames AND/OR paths]
+
+=head1 DESCRIPTION
+
+Pacup (Pacscript Updater) is a maintainer helper tool to help maintainers update their pacscripts. It semi-automates the tedious task of updating pacscripts, and aims to make it a fun process for the maintainer! Originally written in Python, now in Perl.
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-v, --version>
+
+Print version information and exit.
+
+=item B<-h, -?, --help>
+
+Print this help message and exit.
+
+=item B<-r, --show-repology>
+
+Print the parsed repology data and exit.
+
+=item B<-s, --ship>
+
+Create a new branch and push the changes to git.
+
+=item B<-o, --origin-remote>
+
+Specify the remote repository. Default is 'origin'.
+
+=item B<-c, --custom-version>
+
+Set a custom version for the package to fetch, instead of querying Repology.
+
+=item B<-p, --push-force>
+
+Force push to the branch, overwriting any existing one.
+
+=back
+
+=head1 EXAMPLE
+
+    # Expands to packages/foobar/foobar.pacscript
+    pacup foobar
+    pacup -s ./foobar.pacscript
+
+=head1 AUTHOR
+
+Vigress - <vig@disroot.org>
+
+=head1 VERSION
+
+Pacup (Perl edition) v3.1.0
+
+=cut
+
+# vim: set ts=4 sw=4 et:

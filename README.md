@@ -47,7 +47,8 @@ To develop in a `nix` shell run:
 $ nix-shell
 ```
 
-`$PATH` in the `nix-shell` is modified to include `./bin`, so `./bin/pacup` is available without using the file path.
+`$PATH` in the `nix-shell` includes `./pacup`.
+Use [cached-nix-shell](https://github.com/xzfc/cached-nix-shell) for faster startup time.
 
 ## Usage
 
