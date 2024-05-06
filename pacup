@@ -34,7 +34,6 @@ my $opt_origin_remote = 'origin';
 my $opt_custom_version;
 my $opt_push_force = 0;
 
-my ( undef, $here ) = fileparse abs_path $0;
 my $srcinfo_script = "srcinfo.sh";
 my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 my $REPOLOGY_API_ROOT = 'https://repology.org/api/v1/project';
@@ -219,7 +218,7 @@ sub repology_get_newestver ( $response, $filters, $oldver, $action ) {
             print $json_text;
         }
         push @filtered, $entry;
-        if ( $entry->{'status'} ne 'newest' ) {
+        if ( $entry->{'status'} ne 'newest' && $version_count{ $entry->{'version'} }) {
             next
                 unless ( $filters->{'status'}
                 && $filters->{'status'} eq 'devel' )
@@ -258,7 +257,7 @@ sub fetch_source_entry ( $ua, $url, $outfile ) {
         my $location = $response->header('Location');
         $response = $ua->head($location);
     }
-    open my $fh, '>', $outfile or throw "Could not open $outfile: $!";
+    open my $fh, '>:raw', $outfile or throw "Could not open $outfile: $!";
     if ( $response->is_success ) {
         my $final_url = $response->request->uri;
         my $file_size = $ua->head($final_url)->header('Content-Length');
@@ -350,7 +349,8 @@ sub writelines ( $ref, $infile ) {
 
 sub main ($pkg) {
     my $ppath = -f $pkg ? $pkg : "packages/$pkg/$pkg.pacscript";
-    my ( $pacscript, $dir ) = fileparse $ppath;
+    my ( $pacscript, $dir ) = fileparse abs_path $ppath;
+    $ppath = $dir . $pacscript;
     my $srcinfo = $dir . ".SRCINFO";
 
     -f $ppath or throw "Not a file: " . colored( $ppath, 'bold' );
@@ -455,14 +455,14 @@ sub main ($pkg) {
         my $payload = join( ';:', @collected_files );
         local $ENV{'PACSTALL_PAYLOAD'} = $payload;
         system 'pacstall', ( '--install', $ppath );
+        return unless ask_wait "does $pkgname work?";
     } else {
         warner "Pacstall is not installed or not executable!";
     }
 
     return 1 unless $opt_ship;
-    return unless ask_wait "does $pkgname work?";
 
-    my $commit_msg = qq/upd($pkgname): \\\`$pkgver\\\` -> \\\`$newestver\\\`/;
+    my $commit_msg = qq/upd($pkgname): \`$pkgver\` -> \`$newestver\`/;
 
     system 'git', ( 'add', $ppath, $srcinfo );
     my $ship_branch = "ship-$pkgname";
