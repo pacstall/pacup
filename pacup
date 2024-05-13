@@ -218,7 +218,9 @@ sub repology_get_newestver ( $response, $filters, $oldver, $action ) {
             print $json_text;
         }
         push @filtered, $entry;
-        if ( $entry->{'status'} ne 'newest' && $version_count{ $entry->{'version'} }) {
+        if (   $entry->{'status'} ne 'newest'
+            && $version_count{ $entry->{'version'} } )
+        {
             next
                 unless ( $filters->{'status'}
                 && $filters->{'status'} eq 'devel' )
@@ -262,9 +264,10 @@ sub fetch_source_entry ( $ua, $url, $outfile ) {
         my $final_url = $response->request->uri;
         my $file_size = $ua->head($final_url)->header('Content-Length');
         my $progress = Term::ProgressBar->new(
-            {   count => $file_size,
+            {   count => $file_size // 0,
                 ETA => 'linear',
-                remove => 0
+                remove => 0,
+                silent => !defined $file_size,
             }
         );
         $progress->minor(0);
