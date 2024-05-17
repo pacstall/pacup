@@ -38,18 +38,6 @@ my $srcinfo_script = "srcinfo.sh";
 my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 my $REPOLOGY_API_ROOT = 'https://repology.org/api/v1/project';
 
-# List of repositories not to be used for version detection.
-# As can be inferred, we don't like Windows versions.
-my @BANNED_REPOS = qw(
-    appget
-    baulk
-    chocolatey
-    cygwin
-    just-install
-    scoop
-    winget
-);
-
 my $PACUP_DIR;
 my $origcwd = cwd();
 
@@ -205,28 +193,40 @@ sub repology_get_newestver ( $response, $filters, $oldver, $action ) {
     my @filtered;
     my %version_count;
 
+    # List of repositories not to be used for version detection.
+    # As can be inferred, we don't like Windows versions.
+    my @BANNED_REPOS = qw(
+        appget
+        baulk
+        chocolatey
+        cygwin
+        just-install
+        scoop
+        winget
+        macports
+    );
+
     foreach my $entry (@$decoded) {
         next if grep /^\Q$entry->{'repo'}\E$/, @BANNED_REPOS;
         my $is_match
             = all { exists $entry->{$_} && $entry->{$_} eq $filters->{$_} }
             keys %$filters;
         next unless $is_match;
-        next if ( $entry->{'version'} eq 'HEAD' );
+        next if ($entry->{'version'} =~ /^(HEAD|main|master|scm|git|vcs|stable|9999)$/
+            || $entry->{'status'} eq 'rolling');
         if ( $action eq 'display' ) {
             my $json_text = JSON->new->pretty->encode($entry);
             $json_text =~ s/^/\t/mg;
             print $json_text;
         }
         push @filtered, $entry;
-        if (   $entry->{'status'} ne 'newest'
-            && $version_count{ $entry->{'version'} } )
-        {
-            next
-                unless ( $filters->{'status'}
-                && $filters->{'status'} eq 'devel' )
-                || exists $filters->{'repo'};
-        }
         $version_count{ $entry->{'version'} }++;
+        if ( $entry->{'status'} eq 'newest'
+            || defined $filters->{'status'}
+            || defined $filters->{'repo'}
+            ) {
+            $version_count{ $entry->{'version'} }++;
+        }
     }
 
     my $newver = reduce {
