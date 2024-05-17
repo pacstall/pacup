@@ -243,14 +243,14 @@ sub repology_get_newestver ( $response, $filters, $oldver, $action ) {
 
     # reduce by version count (modality) first, then by dpkg comparison
     my $newver = reduce {
-        if ($version_count{$a} > $version_count{$b}) {
+        if ( $version_count{$a} > $version_count{$b} ) {
             $a;
-        } elsif ($version_count{$a} < $version_count{$b}) {
+        } elsif ( $version_count{$a} < $version_count{$b} ) {
             $b;
         } else {
-            if (version_compare_relation($a, REL_GT, $b)) {
+            if ( version_compare_relation ( $a, REL_GT, $b ) ) {
                 $a;
-            } elsif (version_compare_relation($a, REL_LT, $b)) {
+            } elsif ( version_compare_relation ( $a, REL_LT, $b ) ) {
                 $b;
             } else {
                 $a;
