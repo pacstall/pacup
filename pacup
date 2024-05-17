@@ -207,23 +207,29 @@ sub repology_get_newestver ( $response, $filters, $oldver, $action ) {
     );
 
     foreach my $entry (@$decoded) {
+        # pull out entries from banned repos
         next if grep /^\Q$entry->{'repo'}\E$/, @BANNED_REPOS;
+        # pull out entries that don't match filters
         my $is_match
             = all { exists $entry->{$_} && $entry->{$_} eq $filters->{$_} }
             keys %$filters;
         next unless $is_match;
+        # pull out entries that have bad versioning
         next
             if $entry->{'version'}
             =~ /^(HEAD|main|master|scm|git|vcs|stable|9999)$/
             || ( $entry->{'status'} eq 'rolling'
             && ( $filters->{'status'} // 'newest' ) ne 'rolling' );
+        # if -r flag, display matched results
         if ( $action eq 'display' ) {
             my $json_text = JSON->new->pretty->encode($entry);
             $json_text =~ s/^/\t/mg;
             print $json_text;
         }
         push @filtered, $entry;
+        # count everyone at least once
         $version_count{ $entry->{'version'} }++;
+        # if status is newest, or status or repo are defined, give match extra weight
         if ($entry->{'status'} eq 'newest'
             || ( defined $filters->{'status'}
                 && $entry->{'status'} eq $filters->{'status'} )
@@ -231,17 +237,25 @@ sub repology_get_newestver ( $response, $filters, $oldver, $action ) {
                 && $entry->{'repo'} eq $filters->{'repo'} )
             )
         {
-            $version_count{ $entry->{'version'} }++;
+            $version_count{ $entry->{'version'} } += 1000;
         }
     }
 
+    # reduce by version count (modality) first, then by dpkg comparison
     my $newver = reduce {
-        if ( version_compare_relation $a, REL_GT, $b ) {
+        if ( $version_count{$a} > $version_count{$b} ) {
             $a;
-        } elsif ( version_compare_relation $a, REL_LT, $b ) {
+        } elsif ( $version_count{$a} < $version_count{$b} ) {
             $b;
         } else {
-            $version_count{$a} >= $version_count{$b} ? $a : $b;
+            if ( version_compare_relation ( $a, REL_GT, $b ) ) {
+                $a;
+            } elsif ( version_compare_relation ( $a, REL_LT, $b ) ) {
+                $b;
+            } else {
+                # fall back in case a and b are equal
+                $a;
+            }
         }
     } keys %version_count;
 
