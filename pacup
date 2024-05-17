@@ -216,8 +216,7 @@ sub repology_get_newestver ( $response, $filters, $oldver, $action ) {
             if $entry->{'version'}
             =~ /^(HEAD|main|master|scm|git|vcs|stable|9999)$/
             || ( $entry->{'status'} eq 'rolling'
-            && defined $filters->{'status'}
-            && $filters->{'status'} ne 'rolling' );
+            && ( $filters->{'status'} // 'newest' ) ne 'rolling' );
         if ( $action eq 'display' ) {
             my $json_text = JSON->new->pretty->encode($entry);
             $json_text =~ s/^/\t/mg;
