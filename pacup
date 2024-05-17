@@ -222,8 +222,8 @@ sub repology_get_newestver ( $response, $filters, $oldver, $action ) {
         push @filtered, $entry;
         $version_count{ $entry->{'version'} }++;
         if ( $entry->{'status'} eq 'newest'
-            || defined $filters->{'status'}
-            || defined $filters->{'repo'}
+            || ( defined $filters->{'status'} && $entry->{'status'} eq $filters->{'status'} )
+            || ( defined $filters->{'repo'} && $entry->{'repo'} eq $filters->{'repo'} )
             ) {
             $version_count{ $entry->{'version'} }++;
         }
