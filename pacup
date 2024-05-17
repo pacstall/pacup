@@ -194,7 +194,7 @@ sub repology_get_newestver ( $response, $filters, $oldver, $action ) {
     my %version_count;
 
     # List of repositories not to be used for version detection.
-    # As can be inferred, we don't like Windows versions.
+    # As can be inferred, we don't like non-Linux versions.
     my @BANNED_REPOS = qw(
         appget
         baulk
