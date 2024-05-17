@@ -458,7 +458,9 @@ sub main ($pkg) {
         my $payload = join( ';:', @collected_files );
         local $ENV{'PACSTALL_PAYLOAD'} = $payload;
         system 'pacstall', ( '--install', $ppath );
-        return unless ask_wait "does $pkgname work?";
+        if ( $opt_ship ) {
+            return unless ask_wait "Does $pkgname work?";
+        }
     } else {
         warner "Pacstall is not installed or not executable!";
     }
