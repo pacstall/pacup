@@ -7,7 +7,6 @@
 <p align="center">
   <!-- Social -->
   <a href="https://discord.gg/yzrjXJV6K8"><img alt="join discord" src="https://img.shields.io/discord/839818021207801878?color=5865F2&label=Discord&logo=discord&logoColor=FFFFFF&style=for-the-badge"></a>
-  <a href="https://reddit.com/r/pacstall"><img src="https://img.shields.io/reddit/subreddit-subscribers/pacstall?label=Reddit&color=FF4301&style=for-the-badge&logo=reddit&logoColor=FFFFFF" loading="lazy"></a>
   <a href="https://social.linux.pizza/web/@pacstall"><img alt="Mastodon Follow" src="https://img.shields.io/mastodon/follow/107278715447740005?color=3088d4&domain=https%3A%2F%2Fsocial.linux.pizza&label=Mastodon&logo=mastodon&logoColor=white&style=for-the-badge" loading="lazy"></a>
   <a href="https://matrix.to/#/#pacstall:matrix.org"><img alt="join matrix" src="https://img.shields.io/matrix/pacstall:matrix.org?color=888888&label=Matrix&logo=Matrix&style=for-the-badge"></a>
 <p/>
@@ -81,7 +80,7 @@ OPTIONS:
 
 You can get this help text by running `pacup --help`.
 
-You should visit our [wiki](https://github.com/pacstall/pacup.pl/wiki/Wiki), for
+You should visit our [wiki](https://github.com/pacstall/pacup/wiki/Wiki), for
 more information on how to use the `repology` key.
 
 ## How does it work?

@@ -4,7 +4,7 @@ package main;
 use strict;
 use warnings qw(all -experimental::signatures);
 use feature qw(say signatures);
-our $VERSION = '3.1.0';
+our $VERSION = '3.1.3';
 
 #use Data::Dumper;
 use open ':std', ':encoding(UTF-8)';
@@ -207,19 +207,23 @@ sub repology_get_newestver ( $response, $filters, $oldver, $action ) {
     );
 
     foreach my $entry (@$decoded) {
+
         # pull out entries from banned repos
         next if grep /^\Q$entry->{'repo'}\E$/, @BANNED_REPOS;
+
         # pull out entries that don't match filters
         my $is_match
             = all { exists $entry->{$_} && $entry->{$_} eq $filters->{$_} }
             keys %$filters;
         next unless $is_match;
+
         # pull out entries that have bad versioning
         next
             if $entry->{'version'}
             =~ /^(HEAD|main|master|scm|git|vcs|stable|9999)$/
             || ( $entry->{'status'} eq 'rolling'
             && ( $filters->{'status'} // 'newest' ) ne 'rolling' );
+
         # if -r flag, display matched results
         if ( $action eq 'display' ) {
             my $json_text = JSON->new->pretty->encode($entry);
@@ -227,9 +231,11 @@ sub repology_get_newestver ( $response, $filters, $oldver, $action ) {
             print $json_text;
         }
         push @filtered, $entry;
+
         # count everyone at least once
         $version_count{ $entry->{'version'} }++;
-        # if status is newest, or status or repo are defined, give match extra weight
+
+ # if status is newest, or status or repo are defined, give match extra weight
         if ($entry->{'status'} eq 'newest'
             || ( defined $filters->{'status'}
                 && $entry->{'status'} eq $filters->{'status'} )
@@ -248,11 +254,12 @@ sub repology_get_newestver ( $response, $filters, $oldver, $action ) {
         } elsif ( $version_count{$a} < $version_count{$b} ) {
             $b;
         } else {
-            if ( version_compare_relation ( $a, REL_GT, $b ) ) {
+            if ( version_compare_relation( $a, REL_GT, $b ) ) {
                 $a;
-            } elsif ( version_compare_relation ( $a, REL_LT, $b ) ) {
+            } elsif ( version_compare_relation( $a, REL_LT, $b ) ) {
                 $b;
             } else {
+
                 # fall back in case a and b are equal
                 $a;
             }
@@ -478,7 +485,7 @@ sub main ($pkg) {
         my $payload = join( ';:', @collected_files );
         local $ENV{'PACSTALL_PAYLOAD'} = $payload;
         system 'pacstall', ( '--install', $ppath );
-        if ( $opt_ship ) {
+        if ($opt_ship) {
             return unless ask_wait "Does $pkgname work?";
         }
     } else {
@@ -607,7 +614,7 @@ Vigress - <vig@disroot.org>
 
 =head1 VERSION
 
-Pacup (Perl edition) v3.1.0
+Pacup (Perl edition) v3.1.3
 
 =cut
 
