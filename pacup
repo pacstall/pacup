@@ -327,6 +327,7 @@ sub fetch_sources ( $ua, $pkgdir, $sources, $plines ) {
     local $CWD = $pkgdir;
     for my $entry (@$sources) {
         my $url = $entry->{'url'};
+        next unless $url =~ m|^https?://|;
         my $file = basename $url;
         info "Downloading " . colored( $file, 'bold magenta' );
         fetch_source_entry $ua, $url, $file;
