@@ -457,7 +457,7 @@ sub main ($pkg) {
     my $pkgdir = tempdir "$pkgname.XXXXXX", DIR => $PACUP_DIR;
     my ( undef, $ppath_tmp ) = tempfile "$pacscript.XXXXXX", DIR => $pkgdir;
     writelines( \@plines, $ppath_tmp );
-    my $listfile = $origcwd . "distrolist";
+    my $listfile = $origcwd . "/distrolist";
     my $distrolist_cont;
     if ( -f $listfile ) {
         $distrolist_cont = do {
