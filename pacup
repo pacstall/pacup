@@ -458,16 +458,17 @@ sub main ($pkg) {
     my ( undef, $ppath_tmp ) = tempfile "$pacscript.XXXXXX", DIR => $pkgdir;
     writelines( \@plines, $ppath_tmp );
     my $listfile = "distrolist";
+    my $distrolist_cont;
     if ( -f $listfile ) {
         open my $fh, '<', $listfile or throw "Cannot open $listfile: $!";
-        my $distrolist_cont = do { local $/; <$fh> };
+        $distrolist_cont = do { local $/; <$fh> };
         close $fh;
     } else {
         my $remotelist
             = "https://raw.githubusercontent.com/pacstall/pacstall-programs/master/$listfile";
         my $distrolist_res = $ua->get($remotelist);
         throw 'Could not fetch distrolist' unless $distrolist_res->is_success;
-        my $distrolist_cont = $distrolist_res->decoded_content;
+        $distrolist_cont = $distrolist_res->decoded_content;
     }
     system $srcinfo_script, ($ppath_tmp);
     my $srcinfo_tmp = $pkgdir . '/.SRCINFO';
