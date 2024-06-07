@@ -457,16 +457,41 @@ sub main ($pkg) {
     my $pkgdir = tempdir "$pkgname.XXXXXX", DIR => $PACUP_DIR;
     my ( undef, $ppath_tmp ) = tempfile "$pacscript.XXXXXX", DIR => $pkgdir;
     writelines( \@plines, $ppath_tmp );
-
+    my $listfile = "distrolist";
+    my $remotelist;
+    my $listdir;
+    my $distrolist_cont;
+    my $distrolist_res;
+    if ( -f $listfile ) {
+        open my $fh, '<', $listfile or throw "Cannot open $listfile: $!";
+        $distrolist_cont = do { local $/; <$fh> };
+        close $fh;
+    } else {
+        $remotelist
+            = "https://raw.githubusercontent.com/pacstall/pacstall-programs/master/$listfile";
+        $distrolist_res = $ua->get($remotelist);
+        throw 'Could not fetch distrolist' unless $distrolist_res->is_success;
+        $distrolist_cont = $distrolist_res->decoded_content;
+    }
     system $srcinfo_script, ($ppath_tmp);
     my $srcinfo_tmp = $pkgdir . '/.SRCINFO';
     readlines( \@lines, $srcinfo_tmp );
 
     my @arches = getarr 'arch', \@lines;
+    my @distros = map {
+        if (/\S/) { s/\/.*//; s/:$//; $_ }
+        else { () }
+    } split /\s+/, $distrolist_cont;
     my @allSources;
     push @allSources, build_sourcelist \@lines;
     for my $arch (@arches) {
         push @allSources, build_sourcelist \@lines, $arch;
+    }
+    for my $distro (@distros) {
+        push @allSources, build_sourcelist \@lines, $distro;
+        for my $arch (@arches) {
+            push @allSources, build_sourcelist \@lines, $distro . '_' . $arch;
+        }
     }
     throw 'Could not find sources' unless @allSources + 0 > 0;
 
