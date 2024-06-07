@@ -457,7 +457,7 @@ sub main ($pkg) {
     my $pkgdir = tempdir "$pkgname.XXXXXX", DIR => $PACUP_DIR;
     my ( undef, $ppath_tmp ) = tempfile "$pacscript.XXXXXX", DIR => $pkgdir;
     writelines( \@plines, $ppath_tmp );
-    my $listfile = "distrolist";
+    my $listfile = $origcwd . "distrolist";
     my $distrolist_cont;
     if ( -f $listfile ) {
         $distrolist_cont = do {
@@ -467,7 +467,7 @@ sub main ($pkg) {
         };
     } else {
         my $remotelist
-            = "https://raw.githubusercontent.com/pacstall/pacstall-programs/master/$listfile";
+            = "https://raw.githubusercontent.com/pacstall/pacstall-programs/master/distrolist";
         my $distrolist_res = $ua->get($remotelist);
         throw 'Could not fetch distrolist' unless $distrolist_res->is_success;
         $distrolist_cont = $distrolist_res->decoded_content;
