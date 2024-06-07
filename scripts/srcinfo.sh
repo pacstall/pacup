@@ -47,7 +47,29 @@ function vars.srcinfo() {
 }
 
 function gen.srcinfo() {
-  local CARCH='CARCH_REPLACE' DISTRO='DISTROBASE:DISTROVER' var ar aars bar ars rar
+  local CARCH='CARCH_REPLACE' DISTRO='DISTROBASE:DISTROVER' AARCH='AARCH_REPLACE' var ar aars bar ars rar rep seek
+  local -A AARCHS_MAP=(
+    ["amd64"]="x86_64"
+    ["arm64"]="aarch64"
+    ["armel"]="arm"
+    ["armhf"]="armv7h"
+    ["i386"]="i686"
+    ["mips64el"]="mips64el"
+    ["ppc64el"]="ppc64el"
+    ["riscv64"]="riscv64"
+    ["s390x"]="s390x"
+  )
+  local -A CARCHS_MAP=(
+    ["x86_64"]="amd64"
+    ["aarch64"]="arm64"
+    ["arm"]="armel"
+    ["armv7h"]="armhf"
+    ["i686"]="i386"
+    ["mips64el"]="mips64el"
+    ["ppc64el"]="ppc64el"
+    ["riscv64"]="riscv64"
+    ["s390x"]="s390x"
+  )
   # shellcheck disable=SC1090
   source "${1}"
   for var in "${allvars[@]}"; do
@@ -66,11 +88,31 @@ function gen.srcinfo() {
         ars="${ars//+([[:space:]])/ }"
         ars="${ars#[[:space:]]}"
         ars="${ars%[[:space:]]}"
-        if [[ ${ars} =~ CARCH_REPLACE ]]; then
+        if [[ ${ars} =~ CARCH_REPLACE || ${ars} =~ AARCH_REPLACE ]]; then
           [[ -z ${arch[*]} ]] && arch=('amd64')
           for aars in "${arch[@]}"; do
-            : "${ar}_${aars} = ${ars}"
-            echo "${_//CARCH_REPLACE/${aars}}"
+            if [[ ${ars} =~ AARCH_REPLACE ]]; then
+              seek="AARCH_REPLACE"
+              if [[ " ${AARCHS_MAP[@]} " =~ ${aars} ]]; then
+                rep="${aars}"
+              else
+                rep="${AARCHS_MAP[${aars}]}"
+              fi
+            else
+              seek="CARCH_REPLACE"
+              if [[ " ${AARCHS_MAP[@]} " =~ ${aars} ]]; then
+                rep="${CARCHS_MAP[${aars}]}"
+              else
+                rep="${aars}"
+              fi
+            fi
+            if [[ " ${AARCHS_MAP[@]} " =~ " ${ar##*_} " || " ${!AARCHS_MAP[@]} " =~ " ${ar##*_} " || ${ar} == *"x86_64" ]]; then
+              : "${ar} = ${ars}"
+              [[ ${ar} != *"${aars}" ]] && continue
+            else
+              : "${ar}_${aars} = ${ars}"
+            fi
+            echo "${_//${seek}/${rep}}"
           done
         else
           echo "${ar} = ${ars}"
