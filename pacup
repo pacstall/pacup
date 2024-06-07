@@ -460,9 +460,11 @@ sub main ($pkg) {
     my $listfile = "distrolist";
     my $distrolist_cont;
     if ( -f $listfile ) {
-        open my $fh, '<', $listfile or throw "Cannot open $listfile: $!";
-        $distrolist_cont = do { local $/; <$fh> };
-        close $fh;
+        $distrolist_cont = do {
+            local $/;
+            open my $fh, '<', $listfile or throw "Cannot open $listfile: $!";
+            <$fh>;
+        };
     } else {
         my $remotelist
             = "https://raw.githubusercontent.com/pacstall/pacstall-programs/master/$listfile";
