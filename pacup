@@ -123,9 +123,7 @@ sub cleanup {
     if ( $PACUP_DIR && -d $PACUP_DIR ) {
         info 'Cleaning up';
         rmtree $PACUP_DIR;
-        if ( -f $tmp_distrolist ) {
-            unlink $tmp_distrolist
-        }
+        unlink $tmp_distrolist;
     }
 }
 
