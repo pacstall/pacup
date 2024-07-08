@@ -4,7 +4,7 @@ package main;
 use strict;
 use warnings qw(all -experimental::signatures);
 use feature qw(say signatures);
-our $VERSION = '3.3.0';
+our $VERSION = '3.3.1';
 
 #use Data::Dumper;
 use open ':std', ':encoding(UTF-8)';
@@ -40,6 +40,7 @@ my $REPOLOGY_API_ROOT = 'https://repology.org/api/v1/project';
 
 my $PACUP_DIR;
 my $origcwd = cwd();
+my $tmp_distrolist = '';
 
 sub version_info {
     say 'Pacup ', colored( 'v' . $VERSION, 'bold green' );
@@ -122,6 +123,7 @@ sub cleanup {
     if ( $PACUP_DIR && -d $PACUP_DIR ) {
         info 'Cleaning up';
         rmtree $PACUP_DIR;
+        unlink $tmp_distrolist;
     }
 }
 
@@ -137,8 +139,11 @@ local $SIG{TERM} = sub {
 };
 
 sub getvar ( $file, $name, $isarr, $base = undef ) {
-    my $cmd = defined $base ? "$srcinfo_script read $file $name $base" : "$srcinfo_script read $file $name";
-    if ( $isarr eq 1 ) {
+    my $cmd
+        = defined $base
+        ? "$srcinfo_script read $file $name $base"
+        : "$srcinfo_script read $file $name";
+    if ( $isarr == 1 ) {
         my @result = qx($cmd);
         chomp(@result);
         return @result;
@@ -342,14 +347,14 @@ sub fetch_sources ( $ua, $pkgdir, $sources, $plines ) {
 sub build_sourcelist ( $srcinfo, $base, $arch = '' ) {
     my $source_var = $arch ? "source_$arch" : 'source';
     my @sourceList;
-    my @source = getvar($srcinfo, $source_var, 1, $base);
+    my @source = getvar( $srcinfo, $source_var, 1, $base );
     while ( my ( $i, $entry ) = each @source ) {
         my %edict;
         $edict{'url'} = geturl $entry;
         for my $hashtype (@HASHTYPES) {
             my $hashtype_var
                 = $arch ? "${hashtype}sums_$arch" : "${hashtype}sums";
-            my @sums = getvar($srcinfo, $hashtype_var, 1, $base);
+            my @sums = getvar( $srcinfo, $hashtype_var, 1, $base );
             $edict{$hashtype} = $sums[$i];
         }
         push @sourceList, \%edict;
@@ -394,27 +399,27 @@ sub main ($pkg) {
     readlines( \@lines, $srcinfo );
     info "Parsing .SRCINFO for " . colored( $pacscript, 'underline' );
 
-    my $pkgbase = getvar($srcinfo, 'pkgbase', 0);
+    my $pkgbase = getvar( $srcinfo, 'pkgbase', 0 );
     throw 'Could not find pkgbase' unless $pkgbase;
 
-    my @pkgnames = getvar($srcinfo, 'pkgname', 1);
+    my @pkgnames = getvar( $srcinfo, 'pkgname', 1 );
     throw 'Could not find pkgname' unless @pkgnames;
 
     my $pkgname;
-    if (scalar @pkgnames eq 1) {
+    if ( scalar @pkgnames == 1 ) {
         $pkgname = $pkgnames[0];
         subtext "Found pkgname: " . colored( $pkgname, 'cyan' );
     } else {
         subtext "Found pkgbase: " . colored( $pkgbase, 'cyan' );
         subtext "Found pkgnames: " . colored( @pkgnames, 'cyan' );
-        ($pkgname = $pkgbase) =~ s/^pkgbase://;
+        ( $pkgname = $pkgbase ) =~ s/^pkgbase://;
     }
 
-    my $pkgver = getvar($srcinfo, 'pkgver', 0, $pkgbase);
+    my $pkgver = getvar( $srcinfo, 'pkgver', 0, $pkgbase );
     throw 'Could not find pkgver' unless $pkgver;
     subtext "Found pkgver: " . colored( $pkgver, 'bright_yellow' );
 
-    my @maintainer = getvar($srcinfo, 'maintainer', 1, $pkgbase);
+    my @maintainer = getvar( $srcinfo, 'maintainer', 1, $pkgbase );
     if ( @maintainer + 0 > 0 ) {
         subtext 'Found maintainer: '
             . colored( join( ', ', @maintainer ), 'bright_magenta' );
@@ -427,7 +432,7 @@ sub main ($pkg) {
     if ($opt_custom_version) {
         $newestver = $opt_custom_version;
     } else {
-        my @repology = getvar($srcinfo, 'repology', 1, $pkgbase);
+        my @repology = getvar( $srcinfo, 'repology', 1, $pkgbase );
         throw 'Could not find repology' unless @repology + 0 > 0;
         subtext 'Found repology info: '
             . colored( join( ', ', @repology ), 'bright_green' );
@@ -480,12 +485,17 @@ sub main ($pkg) {
         my $distrolist_res = $ua->get($remotelist);
         throw 'Could not fetch distrolist' unless $distrolist_res->is_success;
         $distrolist_cont = $distrolist_res->decoded_content;
+        $tmp_distrolist = $listfile;
+        open my $fh, '>', $tmp_distrolist
+            or throw "Cannot open $tmp_distrolist: $!";
+        print $fh $distrolist_cont;
+        close $fh or throw "Cannot close $tmp_distrolist: $!";
     }
     system $srcinfo_script, "write", ($ppath_tmp);
     my $srcinfo_tmp = $pkgdir . '/.SRCINFO';
     readlines( \@lines, $srcinfo_tmp );
 
-    my @arches = getvar($srcinfo_tmp, 'arch', 1, $pkgbase);
+    my @arches = getvar( $srcinfo_tmp, 'arch', 1, $pkgbase );
     my @distros = map {
         if (/\S/) { s/\/.*//; s/:$//; $_ }
         else { () }
@@ -498,7 +508,8 @@ sub main ($pkg) {
     for my $distro (@distros) {
         push @allSources, build_sourcelist $srcinfo_tmp, $pkgbase, $distro;
         for my $arch (@arches) {
-            push @allSources, build_sourcelist $srcinfo_tmp, $pkgbase, $distro . '_' . $arch;
+            push @allSources, build_sourcelist $srcinfo_tmp, $pkgbase,
+                $distro . '_' . $arch;
         }
     }
     throw 'Could not find sources' unless @allSources + 0 > 0;
@@ -518,7 +529,7 @@ sub main ($pkg) {
         info "Installing from $pacscript";
         my $payload = join( ';:', @collected_files );
         local $ENV{'PACSTALL_PAYLOAD'} = $payload;
-        if (scalar @pkgnames eq 1) {
+        if ( scalar @pkgnames == 1 ) {
             system 'pacstall', ( '--install', $ppath );
             if ($opt_ship) {
                 return unless ask_wait "Does $pkgname work?";
@@ -657,7 +668,7 @@ Vigress - <vig@disroot.org>
 
 =head1 VERSION
 
-Pacup (Perl edition) v3.3.0
+Pacup (Perl edition) v3.3.1
 
 =cut
 
