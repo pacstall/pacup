@@ -4,7 +4,7 @@ package main;
 use strict;
 use warnings qw(all -experimental::signatures);
 use feature qw(say signatures);
-our $VERSION = '3.3.0';
+our $VERSION = '3.3.1';
 
 #use Data::Dumper;
 use open ':std', ':encoding(UTF-8)';
@@ -40,6 +40,7 @@ my $REPOLOGY_API_ROOT = 'https://repology.org/api/v1/project';
 
 my $PACUP_DIR;
 my $origcwd = cwd();
+my $tmp_distrolist = '';
 
 sub version_info {
     say 'Pacup ', colored( 'v' . $VERSION, 'bold green' );
@@ -122,6 +123,9 @@ sub cleanup {
     if ( $PACUP_DIR && -d $PACUP_DIR ) {
         info 'Cleaning up';
         rmtree $PACUP_DIR;
+        if ( -f $tmp_distrolist ) {
+            system "rm", "-f", $tmp_distrolist
+        }
     }
 }
 
@@ -480,6 +484,10 @@ sub main ($pkg) {
         my $distrolist_res = $ua->get($remotelist);
         throw 'Could not fetch distrolist' unless $distrolist_res->is_success;
         $distrolist_cont = $distrolist_res->decoded_content;
+        $tmp_distrolist = $listfile;
+        open my $fh, '>', $tmp_distrolist or throw "Cannot open $tmp_distrolist: $!";
+        print $fh $distrolist_cont;
+        close $fh or throw "Cannot close $tmp_distrolist: $!";
     }
     system $srcinfo_script, "write", ($ppath_tmp);
     my $srcinfo_tmp = $pkgdir . '/.SRCINFO';
@@ -657,7 +665,7 @@ Vigress - <vig@disroot.org>
 
 =head1 VERSION
 
-Pacup (Perl edition) v3.3.0
+Pacup (Perl edition) v3.3.1
 
 =cut
 
