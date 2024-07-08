@@ -4,7 +4,7 @@ package main;
 use strict;
 use warnings qw(all -experimental::signatures);
 use feature qw(say signatures);
-our $VERSION = '3.2.0';
+our $VERSION = '3.3.0';
 
 #use Data::Dumper;
 use open ':std', ':encoding(UTF-8)';
@@ -136,20 +136,17 @@ local $SIG{TERM} = sub {
     exit 1;
 };
 
-sub getvar ( $name, $lines ) {
-    for my $line (@$lines) {
-        my ( $key, $val ) = split / = /, $line;
-        return $val if $key eq $name;
+sub getvar ( $file, $name, $isarr, $base = undef ) {
+    my $cmd = defined $base ? "$srcinfo_script read $file $name $base" : "$srcinfo_script read $file $name";
+    if ( $isarr eq 1 ) {
+        my @result = qx($cmd);
+        chomp(@result);
+        return @result;
+    } else {
+        my $result = qx($cmd);
+        chomp($result);
+        return $result;
     }
-}
-
-sub getarr ( $name, $lines ) {
-    my @arr;
-    for my $line (@$lines) {
-        my ( $key, $val ) = split / = /, $line;
-        push @arr, $val if $key eq $name;
-    }
-    return @arr;
 }
 
 sub geturl ($entry) {
@@ -342,17 +339,17 @@ sub fetch_sources ( $ua, $pkgdir, $sources, $plines ) {
     return @collected_files;
 }
 
-sub build_sourcelist ( $lines, $arch = '' ) {
+sub build_sourcelist ( $srcinfo, $base, $arch = '' ) {
     my $source_var = $arch ? "source_$arch" : 'source';
     my @sourceList;
-    my @source = getarr $source_var, $lines;
+    my @source = getvar($srcinfo, $source_var, 1, $base);
     while ( my ( $i, $entry ) = each @source ) {
         my %edict;
         $edict{'url'} = geturl $entry;
         for my $hashtype (@HASHTYPES) {
             my $hashtype_var
                 = $arch ? "${hashtype}sums_$arch" : "${hashtype}sums";
-            my @sums = getarr $hashtype_var, $lines;
+            my @sums = getvar($srcinfo, $hashtype_var, 1, $base);
             $edict{$hashtype} = $sums[$i];
         }
         push @sourceList, \%edict;
@@ -390,22 +387,34 @@ sub main ($pkg) {
 
     unless ( -f $srcinfo ) {
         info "Generating .SRCINFO for " . colored( $pacscript, 'underline' );
-        system "srcinfo.sh", ($ppath);
+        system $srcinfo_script, "write", ($ppath);
     }
 
     my @lines;
     readlines( \@lines, $srcinfo );
     info "Parsing .SRCINFO for " . colored( $pacscript, 'underline' );
 
-    my $pkgname = getvar 'pkgname', \@lines;
-    throw 'Could not find pkgname' unless $pkgname;
-    subtext "Found pkgname: " . colored( $pkgname, 'cyan' );
+    my $pkgbase = getvar($srcinfo, 'pkgbase', 0);
+    throw 'Could not find pkgbase' unless $pkgbase;
 
-    my $pkgver = getvar 'pkgver', \@lines;
+    my @pkgnames = getvar($srcinfo, 'pkgname', 1);
+    throw 'Could not find pkgname' unless @pkgnames;
+
+    my $pkgname;
+    if (scalar @pkgnames eq 1) {
+        $pkgname = $pkgnames[0];
+        subtext "Found pkgname: " . colored( $pkgname, 'cyan' );
+    } else {
+        subtext "Found pkgbase: " . colored( $pkgbase, 'cyan' );
+        subtext "Found pkgnames: " . colored( @pkgnames, 'cyan' );
+        ($pkgname = $pkgbase) =~ s/^pkgbase://;
+    }
+
+    my $pkgver = getvar($srcinfo, 'pkgver', 0, $pkgbase);
     throw 'Could not find pkgver' unless $pkgver;
     subtext "Found pkgver: " . colored( $pkgver, 'bright_yellow' );
 
-    my @maintainer = getarr 'maintainer', \@lines;
+    my @maintainer = getvar($srcinfo, 'maintainer', 1, $pkgbase);
     if ( @maintainer + 0 > 0 ) {
         subtext 'Found maintainer: '
             . colored( join( ', ', @maintainer ), 'bright_magenta' );
@@ -418,7 +427,7 @@ sub main ($pkg) {
     if ($opt_custom_version) {
         $newestver = $opt_custom_version;
     } else {
-        my @repology = getarr 'repology', \@lines;
+        my @repology = getvar($srcinfo, 'repology', 1, $pkgbase);
         throw 'Could not find repology' unless @repology + 0 > 0;
         subtext 'Found repology info: '
             . colored( join( ', ', @repology ), 'bright_green' );
@@ -472,24 +481,24 @@ sub main ($pkg) {
         throw 'Could not fetch distrolist' unless $distrolist_res->is_success;
         $distrolist_cont = $distrolist_res->decoded_content;
     }
-    system $srcinfo_script, ($ppath_tmp);
+    system $srcinfo_script, "write", ($ppath_tmp);
     my $srcinfo_tmp = $pkgdir . '/.SRCINFO';
     readlines( \@lines, $srcinfo_tmp );
 
-    my @arches = getarr 'arch', \@lines;
+    my @arches = getvar($srcinfo_tmp, 'arch', 1, $pkgbase);
     my @distros = map {
         if (/\S/) { s/\/.*//; s/:$//; $_ }
         else { () }
     } split /\s+/, $distrolist_cont;
     my @allSources;
-    push @allSources, build_sourcelist \@lines;
+    push @allSources, build_sourcelist $srcinfo_tmp, $pkgbase;
     for my $arch (@arches) {
-        push @allSources, build_sourcelist \@lines, $arch;
+        push @allSources, build_sourcelist $srcinfo_tmp, $pkgbase, $arch;
     }
     for my $distro (@distros) {
-        push @allSources, build_sourcelist \@lines, $distro;
+        push @allSources, build_sourcelist $srcinfo_tmp, $pkgbase, $distro;
         for my $arch (@arches) {
-            push @allSources, build_sourcelist \@lines, $distro . '_' . $arch;
+            push @allSources, build_sourcelist $srcinfo_tmp, $pkgbase, $distro . '_' . $arch;
         }
     }
     throw 'Could not find sources' unless @allSources + 0 > 0;
@@ -501,7 +510,7 @@ sub main ($pkg) {
     info "updating " . colored( $pacscript, 'bold yellow' );
     copy $ppath_tmp, $ppath
         or throw "Could not copy $ppath_tmp to $ppath: $!";
-    system $srcinfo_script, ($ppath_tmp);
+    system $srcinfo_script, "write", ($ppath_tmp);
     copy $srcinfo_tmp, $srcinfo
         or throw "Could not copy $srcinfo_tmp to $srcinfo: $!";
 
@@ -509,9 +518,18 @@ sub main ($pkg) {
         info "Installing from $pacscript";
         my $payload = join( ';:', @collected_files );
         local $ENV{'PACSTALL_PAYLOAD'} = $payload;
-        system 'pacstall', ( '--install', $ppath );
-        if ($opt_ship) {
-            return unless ask_wait "Does $pkgname work?";
+        if (scalar @pkgnames eq 1) {
+            system 'pacstall', ( '--install', $ppath );
+            if ($opt_ship) {
+                return unless ask_wait "Does $pkgname work?";
+            }
+        } else {
+            for my $pkg (@pkgnames) {
+                system 'pacstall', ( '--install', $ppath . ':' . $pkg );
+                if ($opt_ship) {
+                    return unless ask_wait "Does $pkg work?";
+                }
+            }
         }
     } else {
         warner "Pacstall is not installed or not executable!";
@@ -639,7 +657,7 @@ Vigress - <vig@disroot.org>
 
 =head1 VERSION
 
-Pacup (Perl edition) v3.2.0
+Pacup (Perl edition) v3.3.0
 
 =cut
 
