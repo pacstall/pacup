@@ -401,7 +401,7 @@ sub main ($pkg) {
     throw 'Could not find pkgname' unless @pkgnames;
 
     my $pkgname;
-    if (scalar @pkgnames == 1) {
+    if (scalar @pkgnames eq 1) {
         $pkgname = $pkgnames[0];
         subtext "Found pkgname: " . colored( $pkgname, 'cyan' );
     } else {
@@ -518,7 +518,7 @@ sub main ($pkg) {
         info "Installing from $pacscript";
         my $payload = join( ';:', @collected_files );
         local $ENV{'PACSTALL_PAYLOAD'} = $payload;
-        if (scalar @pkgnames == 1) {
+        if (scalar @pkgnames eq 1) {
             system 'pacstall', ( '--install', $ppath );
             if ($opt_ship) {
                 return unless ask_wait "Does $pkgname work?";
