@@ -524,6 +524,7 @@ sub main ($pkg) {
     system $srcinfo_script, "write", ($ppath_tmp);
     copy $srcinfo_tmp, $srcinfo
         or throw "Could not copy $srcinfo_tmp to $srcinfo: $!";
+    unlink $tmp_distrolist;
 
     if ( -x '/usr/bin/pacstall' ) {
         info "Installing from $pacscript";
