@@ -581,7 +581,7 @@ sub main ($pkg) {
         'Create PR? (must have gh installed and authenticated to GitHub)' )
     {
         system 'gh',
-            ( 'pr', 'create', '--title', $commit_msg, '--body', '""' );
+            ( 'pr', 'create', '--title', $commit_msg, '--body', '' );
     }
 
     info "Done!";
