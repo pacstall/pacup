@@ -42,7 +42,7 @@ function srcinfo.is_array() {
 }
 
 function srcinfo.die() {
-  printf >&2 'ERROR: %s\n' "$@"
+  printf >&2 '[\033[1;31mERROR\033[0m]: %s\n' "$@"
   exit 1
 }
 
@@ -221,6 +221,7 @@ function srcinfo.write_global() {
               eval "${_//${seek}/${rep}}"
             fi
           done
+          # shellcheck disable=SC2076
           if [[ " ${multivalued_arch_attrs[*]} " =~ " ${ar} " ]]; then
             unset "${ar}"
           fi
@@ -593,7 +594,7 @@ function srcinfo.pkg_list() {
   local origname outlist inlist pkgnames
   mapfile -t inlist < <(ls -1 packages)
   for i in "${inlist[@]}"; do
-    if [[ -n $(awk '/^pkgbase=/' "packages/${i}/${i}.pacscript") ]]; then
+    if awk 'BEGIN { found = 0 } /^pkgbase=/ { found = 1; exit } END { exit !found }' "packages/${i}/${i}.pacscript"; then
       mapfile -t pkgnames < <(srcinfo.match_pkg packages/"${i}"/.SRCINFO pkgname)
       outlist+=("${i}:pkgbase")
       for j in "${pkgnames[@]}"; do
@@ -607,6 +608,7 @@ function srcinfo.pkg_list() {
 }
 
 function srcinfo.repo_check() {
+  local tracked repolist ret
   mapfile -t tracked < <(git ls-files)
   if ((${#@} < 1)); then
     mapfile -t repolist < <(ls packages/*/*.pacscript)
@@ -626,28 +628,276 @@ function srcinfo.repo_check() {
       ret=1
     fi
   done
-  exit "${ret}"
+  return "${ret}"
+}
+
+function srcinfo.list_build() {
+  local FILE="${1}" filelist tmploc
+  tmploc="$(mktemp)"
+  printf "### Auto-generated for pacstall-programs\n### DO NOT EDIT. Use scripts/srcinfo.sh to build.\n" > "${tmploc}"
+  mapfile -t filelist < <(ls packages/*/.SRCINFO)
+  for i in "${filelist[@]}"; do
+    echo "---" >> "${tmploc}"
+    while IFS= read -r line; do
+      echo "${line}" >> "${tmploc}"
+    done < "${i}"
+  done
+  mv "${tmploc}" "${FILE}"
+}
+
+function srcinfo.list_search() {
+  local FILE="${1}"
+  awk -v kw="${2}" '
+  BEGIN {
+    FS = "[[:space:]]*=[[:space:]]*"
+    OFS = " - "
+    found = 0
+    kw = tolower(kw)
+  }
+  function print_pkgbase_and_pkgname() {
+    if (pkgbase != "") {
+      print pkgbase, pkgbase_desc
+      if (pkgname != "") {
+        desc = (pkgname_desc != "" ? pkgname_desc : pkgbase_desc)
+        print pkgbase ":" pkgname, desc
+      }
+    }
+  }
+  /^---$/ {
+    if (pkgbase != "" && (pkgbase ~ kw || tolower(pkgbase_desc) ~ kw)) {
+      print_pkgbase_and_pkgname()
+      found = 1
+    } else if (pkgname != "" && (pkgname ~ kw || tolower(pkgname_desc) ~ kw)) {
+      print_pkgbase_and_pkgname()
+      found = 1
+    }
+    pkgname = ""; pkgbase = ""; pkgbase_desc = ""; pkgname_desc = ""; next
+  }
+  /^[[:space:]]*pkgbase[[:space:]]*=/ {
+    pkgbase = $2
+    pkgbase_desc = ""
+  }
+  /^[[:space:]]*pkgname[[:space:]]*=/ {
+    if (pkgname != "") {
+      desc = (pkgname_desc != "" ? pkgname_desc : pkgbase_desc)
+      if (pkgname ~ kw || tolower(desc) ~ kw) {
+        print pkgbase ":" pkgname, desc
+        found = 1
+      }
+    }
+    pkgname = $2
+    pkgname_desc = ""
+  }
+  /^[[:space:]]*pkgdesc[[:space:]]*=/ {
+    if (pkgname == "") {
+      pkgbase_desc = $2
+    } else {
+      pkgname_desc = $2
+    }
+  }
+  END {
+    if (!found) {
+      print "No matching packages found"
+    }
+  }
+  ' "${FILE}"
+}
+
+function srcinfo.list_parse() {
+  local SRCFILE="${1}" PKGFILE="${2}" KWD="${3}" SEARCH CHILD searchlist pkglist foundname exact=false
+  SEARCH="${KWD%% *}"
+  if [[ ${KWD} == \'*\' ]]; then
+    exact=true
+    KWD="${KWD%*\'}"
+    KWD="${KWD#\'*}"
+  elif [[ ${KWD} == \"*\" ]]; then
+    exact=true
+    KWD="${KWD%*\"}"
+    KWD="${KWD#\"*}"
+  else
+    KWD="${KWD,,}"
+  fi
+  if [[ ${SEARCH} == *':'* && ${SEARCH} == "${KWD##* }" ]]; then
+    CHILD="${SEARCH#*:}" KWD="${SEARCH%:*}"
+  fi
+  mapfile -t searchlist < <(srcinfo.list_search "${1}" "${KWD}")
+  mapfile -t pkglist < "${PKGFILE}"
+  for i in "${searchlist[@]}"; do
+    foundname="${i%% -*}"
+    if [[ -n ${CHILD} && ${CHILD} != "pkgbase" && ${foundname} != "${KWD}:${CHILD}" ]] \
+      || [[ ${CHILD} == "pkgbase" && ${foundname} =~ ':' && ${foundname} != *":${CHILD}" ]] \
+      || [[ ${exact} == true && ${i} != *"${KWD}"* ]] \
+      || [[ ${exact} == false && -n ${KWD} && ${i,,} != *"${KWD}"* ]]; then
+      continue
+    fi
+    if srcinfo._contains pkglist "${foundname}"; then
+      printf '\033[0;35m%s\033[0m - %s\n' "${foundname}" "${i#* - }"
+    elif srcinfo._contains pkglist "${foundname}:pkgbase"; then
+      printf '\033[0;35m%s:pkgbase\033[0m - %s\n' "${foundname}" "${i#* - }"
+    fi
+  done
+}
+
+function srcinfo.list_info() {
+  local FILE="${1}" SEARCH="${2}" NAME FIELD
+  NAME="${SEARCH#*:}" PARENT="${SEARCH%:*}"
+  if [[ ${SEARCH} != *':'* || ${NAME} == "pkgbase" ]]; then
+    FIELD="pkgbase"
+  else
+    FIELD="pkgname"
+  fi
+  [[ ${NAME} == "pkgbase" ]] && NAME="${PARENT}"
+  awk -v pkg="${NAME}" -v field="${FIELD}" '
+  BEGIN { print_pkg = 0 }
+  /^[[:space:]]*$/ || /^---$/ {
+    if (print_pkg && field == "pkgname") {
+      exit
+    }
+  }
+  /^---$/ {
+    print_pkg = 0
+  }
+  {
+    if ($1 == "pkgbase" && $3 != pkg && field == "pkgname") {
+      print_pkg = 0
+    }
+    if ($1 == field && $3 == pkg) {
+      print_pkg = 1
+    }
+    if (print_pkg) {
+      print
+    }
+  }
+  ' "${FILE}"
+}
+
+function srcinfo.head_only() {
+  if ! [[ -d "packages" && -d "scripts" && -f "distrolist" ]]; then
+    srcinfo.die "This command can only be run from the head of a repository"
+  fi
 }
 
 function srcinfo.cmd() {
-  if [[ ${1} == "write" ]]; then
-    shift 1
-    # list of packages to write to
-    srcinfo.write_out "${@}"
-  elif [[ ${1} == "check" ]]; then
-    shift 1
-    # check if .SRCINFOs exist
-    srcinfo.repo_check "${@}"
-  elif [[ ${1} == "packagelist" ]]; then
-    # no args
-    srcinfo.pkg_list > packagelist
-  elif [[ ${1} == "read" ]]; then
-    # see srcinfo.match_pkg for description
-    # shellcheck disable=SC2086
-    srcinfo.match_pkg "${2:?No SRCINFO file provided}" "${3:?No variable provided}" ${4}
-  else
-    srcinfo.die "options: read | write | packagelist | check"
-  fi
+  export GREEN=$'\033[0;32m' NC=$'\033[0m'
+  case "${1}" in
+    write)
+      [[ ! -f "distrolist" ]] && srcinfo.die "distrolist file required to generate .SRCINFO"
+      shift 1
+      # list of packages to write to
+      ((${#@} < 1)) && srcinfo.die "Usage: ${GREEN}write${NC} {<path/to/1.pacscript> <path/to/2.pacscript>...}"
+      srcinfo.write_out "${@}"
+      ;;
+    check)
+      shift 1
+      # check if .SRCINFOs exist
+      ((${#@} < 1)) && srcinfo.die "Usage: ${GREEN}check${NC} {<path/to/1.pacscript> <path/to/2.pacscript>...}"
+      srcinfo.repo_check "${@}"
+      ;;
+    read)
+      [[ -z ${3} || ${2} == *".pacscript" ]] && srcinfo.die "Usage: ${GREEN}read${NC} <path/to/.SRCINFO> {pkgbase | pkgname | <variable> [<package> | pkgbase:<package>]}"
+      # shellcheck disable=SC2086
+      srcinfo.match_pkg "${2}" "${3}" ${4}
+      ;;
+    add)
+      srcinfo.head_only
+      shift 1
+      # check if .SRCINFOs exist
+      ((${#@} < 1)) && srcinfo.die "Usage: ${GREEN}add${NC} {<package1> <package2>...}"
+      local allin
+      for i in "${@}"; do
+        allin+=("packages/${i}/${i}.pacscript")
+      done
+      srcinfo.write_out "${allin[@]}" \
+        && srcinfo.repo_check "${allin[@]}" \
+        && srcinfo.pkg_list > "packagelist" \
+        && srcinfo.list_build "srclist"
+      ;;
+    build)
+      srcinfo.head_only
+      case "${2}" in
+        packagelist)
+          srcinfo.pkg_list > "packagelist"
+          ;;
+        srclist)
+          srcinfo.list_build "srclist"
+          ;;
+        all)
+          srcinfo.pkg_list > "packagelist"
+          srcinfo.list_build "srclist"
+          ;;
+        *)
+          srcinfo.die "Usage: ${GREEN}build${NC} {packagelist | srclist | all}"
+          ;;
+      esac
+      ;;
+    search)
+      srcinfo.head_only
+      [[ -z ${2} ]] && srcinfo.die "Usage: ${GREEN}search${NC} {<package> | <pkgbase>:<pkgname> | <keyword> | <'keyword string'>}"
+      [[ ! -f "packagelist" ]] && srcinfo.pkg_list > "packagelist"
+      [[ ! -f "srclist" ]] && srcinfo.list_build "srclist"
+      srcinfo.list_parse "srclist" "packagelist" "${2}"
+      ;;
+    info)
+      srcinfo.head_only
+      [[ -z ${2} ]] && srcinfo.die "Usage: ${GREEN}info${NC} {<package> | <pkgbase>:<pkgname>}"
+      [[ ! -f "srclist" ]] && srcinfo.list_build "srclist"
+      srcinfo.list_info "srclist" "${2}"
+      ;;
+    help)
+      local all_cmds=("add" "search" "info" "build" "read" "write" "check") option usage
+      case "${2}" in
+        add)
+          usage="{<package1> <package2>...}"
+          purpose="Generate .SRCINFOs, check their statuses, and update the packagelist + srclist"
+          ;;
+        search)
+          usage="{<package> | <pkgbase>:<pkgname> | <keyword> | <'keyword string'>}"
+          purpose="Search for matching packages and descriptions from the srclist file"
+          ;;
+        info)
+          usage="{<package> | <pkgbase>:<pkgname>}"
+          purpose="Parse a package or child .SRCINFO from the srclist file"
+          ;;
+        build)
+          usage="{packagelist | srclist | all}"
+          purpose="Update the packagelist and/or srclist"
+          ;;
+        read)
+          usage="<path/to/.SRCINFO> {pkgbase | pkgname | <variable> [<package> | pkgbase:<package>]}"
+          purpose="Parse variables and arrays from a .SRCINFO file"
+          ;;
+        write)
+          usage="{<path/to/1.pacscript> <path/to/2.pacscript>...}"
+          purpose="Generate .SRCINFOs for pacscripts"
+          ;;
+        check)
+          usage="{<path/to/1.pacscript> <path/to/2.pacscript>...}"
+          purpose="Check the git status of .SRCINFOs for pacscripts"
+          ;;
+        all)
+          for i in "${all_cmds[@]}"; do
+            ${0} help "${i}"
+          done
+          exit 0
+          ;;
+        *)
+          usage="{add | search | info | build | read | write | check | help [all | <cmd>]}"
+          purpose="Help maintainers and repo owners easily manage package data generation"
+          ;;
+      esac
+      if srcinfo._contains all_cmds "${2}"; then
+        option="${2}"
+      else
+        option="${0}"
+      fi
+      printf '[\033[0;33mHELP\033[0m] Command: \033[0;32m%s\033[0m\n' "${option}"
+      printf '   [\033[1;33m?\033[0m] \033[0;32mUsage\033[0m: %s %s\n' "${option}" "${usage}"
+      printf '   [\033[1;33m?\033[0m] \033[0;32mPurpose\033[0m: %s\n' "${purpose}"
+      ;;
+    *)
+      srcinfo.die "Usage: ${GREEN}${0}${NC} {add | search | info | build | read | write | check | help}"
+      ;;
+  esac
 }
 
 srcinfo.cmd "${@}"
