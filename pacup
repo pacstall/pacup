@@ -4,7 +4,7 @@ package main;
 use strict;
 use warnings qw(all -experimental::signatures);
 use feature qw(say signatures);
-our $VERSION = '3.3.2';
+our $VERSION = '3.3.3';
 
 #use Data::Dumper;
 use open ':std', ':encoding(UTF-8)';
@@ -34,7 +34,7 @@ my $opt_origin_remote = 'origin';
 my $opt_custom_version;
 my $opt_push_force = 0;
 
-my $srcinfo_script = "srcinfo.sh";
+my $srcinfo_script = "pacup-srcinfo";
 my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
 my $REPOLOGY_API_ROOT = 'https://repology.org/api/v1/project';
 
@@ -381,6 +381,12 @@ sub writelines ( $ref, $infile ) {
 }
 
 sub main ($pkg) {
+    if ($opt_ship) {
+        unless ( -d "packages" && -d "scripts" ) {
+            throw
+                "Running with '--ship' must be done from the head of the repository";
+        }
+    }
     my $ppath = -f $pkg ? $pkg : "packages/$pkg/$pkg.pacscript";
     my ( $pacscript, $dir ) = fileparse abs_path $ppath;
     $ppath = $dir . $pacscript;
@@ -549,9 +555,10 @@ sub main ($pkg) {
 
     return 1 unless $opt_ship;
 
+    system $srcinfo_script, "build", "srclist";
     my $commit_msg = qq/upd($pkgname): \`$pkgver\` -> \`$newestver\`/;
 
-    system 'git', ( 'add', $ppath, $srcinfo );
+    system 'git', ( 'add', $ppath, $srcinfo, 'srclist' );
     my $ship_branch = "ship-$pkgname";
     my $current_branch = capture 'git',
         ( 'rev-parse', '--abbrev-ref', 'HEAD' );
@@ -580,8 +587,7 @@ sub main ($pkg) {
     if ( ask
         'Create PR? (must have gh installed and authenticated to GitHub)' )
     {
-        system 'gh',
-            ( 'pr', 'create', '--title', $commit_msg, '--body', '' );
+        system 'gh', ( 'pr', 'create', '--title', $commit_msg, '--body', '' );
     }
 
     info "Done!";
@@ -669,7 +675,7 @@ Vigress - <vig@disroot.org>
 
 =head1 VERSION
 
-Pacup (Perl edition) v3.3.2
+Pacup (Perl edition) v3.3.3
 
 =cut
 
