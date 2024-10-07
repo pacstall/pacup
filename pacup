@@ -4,7 +4,7 @@ package main;
 use strict;
 use warnings qw(all -experimental::signatures);
 use feature qw(say signatures);
-our $VERSION = '3.3.6';
+our $VERSION = '3.3.7';
 
 #use Data::Dumper;
 use open ':std', ':encoding(UTF-8)';
@@ -33,6 +33,7 @@ my $opt_ship = 0;
 my $opt_origin_remote = 'origin';
 my $opt_custom_version;
 my $opt_push_force = 0;
+my $opt_test = 1;
 
 my $srcinfo_script = "pacup-srcinfo";
 my @HASHTYPES = qw(b2 md5 sha1 sha224 sha256 sha384 sha512);
@@ -137,6 +138,7 @@ local $SIG{TERM} = sub {
     cleanup();
     exit 1;
 };
+local $ENV{LC_ALL} = 'C';
 
 sub getvar ( $file, $name, $isarr, $base = undef ) {
     my $cmd
@@ -533,21 +535,25 @@ sub main ($pkg) {
     unlink $tmp_distrolist;
 
     if ( -x '/usr/bin/pacstall' ) {
-        info "Installing from $pacscript";
-        my $payload = join( ';:', @collected_files );
-        local $ENV{'PACSTALL_PAYLOAD'} = $payload;
-        if ( scalar @pkgnames == 1 ) {
-            system 'pacstall', ( '--install', $ppath );
-            if ($opt_ship) {
-                return unless ask_wait "Does $pkgname work?";
-            }
-        } else {
-            for my $pkg (@pkgnames) {
-                system 'pacstall', ( '--install', $ppath . ':' . $pkg );
+        if ($opt_test) {
+            info "Installing from $pacscript";
+            my $payload = join( ';:', @collected_files );
+            local $ENV{'PACSTALL_PAYLOAD'} = $payload;
+            if ( scalar @pkgnames == 1 ) {
+                system 'pacstall', ( '--install', $ppath );
                 if ($opt_ship) {
-                    return unless ask_wait "Does $pkg work?";
+                    return unless ask_wait "Does $pkgname work?";
+                }
+            } else {
+                for my $pkg (@pkgnames) {
+                    system 'pacstall', ( '--install', $ppath . ':' . $pkg );
+                    if ($opt_ship) {
+                        return unless ask_wait "Does $pkg work?";
+                    }
                 }
             }
+        } else {
+            info "Skipping testing of $pacscript";
         }
     } else {
         warner "Pacstall is not installed or not executable!";
@@ -603,6 +609,7 @@ unless (caller) {
         'origin-remote|o=s' => \$opt_origin_remote,
         'custom-version|c=s' => \$opt_custom_version,
         'push-force|p' => \$opt_push_force,
+        'test!' => \$opt_test,
     ) or pod2usage(2);
 
     version_info() if $opt_version;
@@ -661,6 +668,10 @@ Set a custom version for the package to fetch, instead of querying Repology.
 
 Force push to the branch, overwriting any existing one.
 
+=item B<--[no-]test>
+
+Prompt to install each package for testing. True by default.
+
 =back
 
 =head1 EXAMPLE
@@ -675,7 +686,7 @@ Vigress - <vig@disroot.org>
 
 =head1 VERSION
 
-Pacup (Perl edition) v3.3.6
+Pacup (Perl edition) v3.3.7
 
 =cut
 
