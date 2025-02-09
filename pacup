@@ -4,7 +4,7 @@ package main;
 use strict;
 use warnings qw(all -experimental::signatures);
 use feature qw(say signatures);
-our $VERSION = '3.3.10';
+our $VERSION = '3.3.11';
 
 #use Data::Dumper;
 use open ':std', ':encoding(UTF-8)';
@@ -687,7 +687,7 @@ Vigress - <vig@disroot.org>
 
 =head1 VERSION
 
-Pacup (Perl edition) v3.3.10
+Pacup (Perl edition) v3.3.11
 
 =cut
 
