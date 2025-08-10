@@ -597,6 +597,12 @@ sub main ($pkg) {
         system 'gh', ( 'pr', 'create', '--title', $commit_msg, '--body', '' );
     }
 
+    if ( ask
+        'Checkout to master?' )
+    {
+        system 'git', ( 'checkout', 'master');
+    }
+
     info "Done!";
     return 1;
 }
