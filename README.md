@@ -37,6 +37,7 @@ or
 ```bash
 $ git clone https://github.com/pacstall/pacup.pl
 $ cd pacup.pl
+$ cpan Data::Compare File::chdir JSON List::MoreUtils Term::ProgressBar
 $ perl Makefile.PL
 $ sudo make install
 ```
