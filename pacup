@@ -157,7 +157,12 @@ sub getvar ( $file, $name, $isarr, $base = undef ) {
 }
 
 sub command_exists ($cmd) {
-    system("command -v $cmd >/dev/null 2>&1") == 0;
+    for my $path ( split /:/, $ENV{PATH} ) {
+        if ( -f "$path/$cmd" && -x _ ) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 sub geturl ($entry) {
