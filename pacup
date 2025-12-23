@@ -156,6 +156,10 @@ sub getvar ( $file, $name, $isarr, $base = undef ) {
     }
 }
 
+sub command_exists ($cmd) {
+    system("command -v $cmd >/dev/null 2>&1") == 0;
+}
+
 sub geturl ($entry) {
     my $url;
     if ( $entry =~ /::/ ) {
@@ -482,6 +486,7 @@ sub main ($pkg) {
     writelines( \@plines, $ppath_tmp );
     my $listfile = $origcwd . "/distrolist";
     my $distrolist_cont;
+
     if ( -f $listfile ) {
         $distrolist_cont = do {
             local $/;
@@ -591,16 +596,18 @@ sub main ($pkg) {
     push @pushargs, '--force-with-lease' if $opt_push_force;
     system 'git', @pushargs;
 
-    if ( ask
-        'Create PR? (must have gh installed and authenticated to GitHub)' )
-    {
-        system 'gh', ( 'pr', 'create', '--title', $commit_msg, '--body', '' );
+    if ( command_exists 'gh' ) {
+        if ( ask
+            'Create PR? (must have gh installed and authenticated to GitHub)'
+            )
+        {
+            system 'gh',
+                ( 'pr', 'create', '--title', $commit_msg, '--body', '' );
+        }
     }
 
-    if ( ask
-        'Checkout to master?' )
-    {
-        system 'git', ( 'checkout', 'master');
+    if ( ask 'Checkout to master?' ) {
+        system 'git', ( 'checkout', 'master' );
     }
 
     info "Done!";
