@@ -10,7 +10,12 @@ our $VERSION = '3.3.13';
 use open ':std', ':encoding(UTF-8)';
 use Cwd qw(abs_path cwd);
 use Data::Compare;
-use Dpkg::Version;
+BEGIN {
+    my $m = 'Dpkg::Version';
+    $m = "Debian::$m" if $^O eq 'darwin';
+    eval "require $m" or die $@;
+    $m->import();
+}
 use File::Basename qw(basename fileparse);
 use File::chdir;
 use File::Copy qw(copy);
